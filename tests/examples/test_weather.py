@@ -10,7 +10,8 @@ from examples.tools.weather_tool import (
     create_weather_tool,
     weather_handler,
     _get_weather_data,
-    _format_weather_response
+    _format_weather_response,
+    _check_weather_response
 )
 
 
@@ -110,68 +111,132 @@ async def test_weather_handler_invalid_units() -> None:
             })
 
 
-@pytest.mark.skip(reason="This test is flaky and needs to be fixed.")
 @pytest.mark.asyncio
-async def test_get_weather_data(mock_weather_response: Dict[str, Any], mock_aiohttp_session: AsyncMock) -> None:
-    """Test getting weather data from the API."""
-    with patch("aiohttp.ClientSession", return_value=mock_aiohttp_session):
-        result = await _get_weather_data(
-            location="London",
-            units="metric",
-            api_key="test_key"
-        )
-        
-        assert result == mock_weather_response
-        
-        # Verify API call
-        mock_aiohttp_session.get.assert_called_once()
-        call_args = mock_aiohttp_session.get.call_args[0][0]
-        assert "api.openweathermap.org" in call_args
-        assert "data/2.5/weather" in call_args
+async def test_check_weather_response() -> None:
+    """Test the _check_weather_response function for different response statuses."""
+    # Test successful response (200)
+    mock_200 = AsyncMock()
+    mock_200.status = 200
+    await _check_weather_response(mock_200, "London")  # Should not raise
+
+    # Test not found response (404)
+    mock_404 = AsyncMock()
+    mock_404.status = 404
+    with pytest.raises(WeatherError, match="Location not found: Paris"):
+        await _check_weather_response(mock_404, "Paris")
+
+    # Test server error response (500)
+    mock_500 = AsyncMock()
+    mock_500.status = 500
+    mock_500.text = AsyncMock(return_value="Internal Server Error")
+    with pytest.raises(WeatherError, match="OpenWeatherMap API error: 500 - Internal Server Error"):
+        await _check_weather_response(mock_500, "London")
+
+    # Test other error response (403)
+    mock_403 = AsyncMock()
+    mock_403.status = 403
+    mock_403.text = AsyncMock(return_value="Forbidden")
+    with pytest.raises(WeatherError, match="OpenWeatherMap API error: 403 - Forbidden"):
+        await _check_weather_response(mock_403, "London")
 
 
-@pytest.mark.skip(reason="This test is flaky and needs to be fixed.")
 @pytest.mark.asyncio
-async def test_get_weather_data_api_error(mock_aiohttp_session: AsyncMock) -> None:
-    """Test handling API errors when getting weather data."""
-    with patch("aiohttp.ClientSession", return_value=mock_aiohttp_session):
-        # Test 404 error
-        mock_response = AsyncMock()
-        mock_response.status = 404
-        mock_response.text = AsyncMock(return_value="Not found")
+async def test_get_weather_data_success(mock_weather_response: Dict[str, Any]) -> None:
+    """Test successful weather data retrieval."""
+    # Set up mock response
+    mock_response = AsyncMock()
+    mock_response.json = AsyncMock(return_value=mock_weather_response)
+    mock_response.__aenter__ = AsyncMock(return_value=mock_response)
 
-        mock_get = AsyncMock()
-        mock_get.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_get.__aexit__ = AsyncMock()
+    # Set up mock session
+    mock_session = AsyncMock()
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.get = MagicMock(return_value=mock_response)  # Not async - returns context manager directly
 
-        mock_aiohttp_session.__aenter__ = AsyncMock(return_value=mock_aiohttp_session)
-        mock_aiohttp_session.__aexit__ = AsyncMock()
-        mock_aiohttp_session.get = AsyncMock(return_value=mock_get)
-
-        with pytest.raises(WeatherError, match="Location not found: Invalid Location"):
-            await _get_weather_data(
-                location="Invalid Location",
-                units="metric",
-                api_key="test_key"
-            )
-
-        # Test 500 error
-        mock_response = AsyncMock()
-        mock_response.status = 500
-        mock_response.text = AsyncMock(return_value="Internal server error")
-
-        mock_get = AsyncMock()
-        mock_get.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_get.__aexit__ = AsyncMock()
-
-        mock_aiohttp_session.get = AsyncMock(return_value=mock_get)
-
-        with pytest.raises(WeatherError, match="OpenWeatherMap API error: 500 - Internal server error"):
-            await _get_weather_data(
+    # Mock _check_weather_response
+    with patch("examples.tools.weather_tool._check_weather_response") as mock_check:
+        with patch("aiohttp.ClientSession", return_value=mock_session):
+            result = await _get_weather_data(
                 location="London",
                 units="metric",
                 api_key="test_key"
             )
+            
+            # Verify result
+            assert result == mock_weather_response
+            
+            # Verify API call
+            mock_session.get.assert_called_once()
+            call_args = mock_session.get.call_args
+            assert call_args[0][0] == "http://api.openweathermap.org/data/2.5/weather"
+            assert call_args[1]["params"] == {
+                "q": "London",
+                "units": "metric",
+                "appid": "test_key"
+            }
+            
+            # Verify _check_weather_response was called with the response from __aenter__
+            mock_check.assert_called_once_with(mock_response, "London")
+
+
+@pytest.mark.asyncio
+async def test_get_weather_data_errors() -> None:
+    """Test weather data retrieval with different error responses."""
+    test_cases = [
+        {
+            "status": 404,
+            "error": WeatherError("Location not found: NonexistentCity"),
+            "location": "NonexistentCity"
+        },
+        {
+            "status": 500,
+            "error": WeatherError("OpenWeatherMap API error: 500 - Internal Server Error"),
+            "location": "London"
+        },
+        {
+            "status": 403,
+            "error": WeatherError("OpenWeatherMap API error: 403 - Invalid API key"),
+            "location": "London"
+        }
+    ]
+
+    for case in test_cases:
+        # Set up mock response
+        mock_response = AsyncMock()
+        mock_response.json = AsyncMock(return_value={})  # Should not be called
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+
+        # Set up mock session
+        mock_session = AsyncMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.get = MagicMock(return_value=mock_response)
+
+        # Mock _check_weather_response to raise the error
+        with patch("examples.tools.weather_tool._check_weather_response") as mock_check:
+            mock_check.side_effect = case["error"]
+            
+            with patch("aiohttp.ClientSession", return_value=mock_session):
+                with pytest.raises(WeatherError) as exc_info:
+                    await _get_weather_data(
+                        location=case["location"],
+                        units="metric",
+                        api_key="test_key"
+                    )
+                
+                assert str(exc_info.value) == str(case["error"])
+
+                # Verify API call was made with correct parameters
+                mock_session.get.assert_called_once()
+                call_args = mock_session.get.call_args
+                assert call_args[0][0] == "http://api.openweathermap.org/data/2.5/weather"
+                assert call_args[1]["params"] == {
+                    "q": case["location"],
+                    "units": "metric",
+                    "appid": "test_key"
+                }
+                
+                # Verify _check_weather_response was called with the response from __aenter__
+                mock_check.assert_called_once_with(mock_response, case["location"])
 
 
 def test_format_weather_response(mock_weather_response: Dict[str, Any]) -> None:
@@ -214,18 +279,23 @@ def test_format_weather_response(mock_weather_response: Dict[str, Any]) -> None:
     assert "Conditions: Light rain" in imperial_result
 
 
-@pytest.mark.skip(reason="This test is flaky and needs to be fixed.")
 @pytest.mark.asyncio
-async def test_weather_handler_success(mock_weather_response: Dict[str, Any], mock_aiohttp_session: AsyncMock) -> None:
-    """Test successful weather handler execution."""
-    with patch.dict(os.environ, {"OPENWEATHERMAP_API_KEY": "test_key"}):
-        with patch("aiohttp.ClientSession", return_value=mock_aiohttp_session):
-            result = await weather_handler({
-                "location": "London",
-                "units": "metric"
-            })
-            
-            assert isinstance(result, str)
-            assert "London, GB" in result
-            assert "Temperature: 20.0°C" in result
-            assert "Conditions: Clear sky" in result 
+async def test_check_weather_response() -> None:
+    """Test the _check_weather_response function directly."""
+    # Test successful response
+    mock_success = AsyncMock()
+    mock_success.status = 200
+    await _check_weather_response(mock_success, "London")  # Should not raise
+
+    # Test 404 response
+    mock_404 = AsyncMock()
+    mock_404.status = 404
+    with pytest.raises(WeatherError, match="Location not found: Test City"):
+        await _check_weather_response(mock_404, "Test City")
+
+    # Test other error response
+    mock_500 = AsyncMock()
+    mock_500.status = 500
+    mock_500.text = AsyncMock(return_value="Server Error")
+    with pytest.raises(WeatherError, match="OpenWeatherMap API error: 500 - Server Error"):
+        await _check_weather_response(mock_500, "Test City") 

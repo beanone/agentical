@@ -96,8 +96,10 @@ class SafeCalculator:
             CalculatorError: If the node type is not supported
         """
         # Numbers
-        if isinstance(node, ast.Num):
-            return node.n
+        if isinstance(node, ast.Constant):
+            if not isinstance(node.value, (int, float)):
+                raise CalculatorError("Unsupported expression type")
+            return node.value
             
         # Binary operations
         if isinstance(node, ast.BinOp):

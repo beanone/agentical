@@ -137,6 +137,24 @@ def create_weather_tool() -> Tool:
     )
 
 
+async def _check_weather_response(response: aiohttp.ClientResponse, location: str) -> None:
+    """Check the weather API response for errors.
+    
+    Args:
+        response: The aiohttp response to check
+        location: The location string used in the request, for error messages
+        
+    Raises:
+        WeatherError: If the response indicates an error
+    """
+    if response.status == 404:
+        raise WeatherError(f"Location not found: {location}")
+    elif response.status != 200:
+        raise WeatherError(
+            f"OpenWeatherMap API error: {response.status} - {await response.text()}"
+        )
+
+
 async def _get_weather_data(
     location: str,
     units: str,
@@ -165,13 +183,7 @@ async def _get_weather_data(
     
     async with aiohttp.ClientSession() as session:
         async with session.get(base_url, params=params) as response:
-            if response.status == 404:
-                raise WeatherError(f"Location not found: {location}")
-            elif response.status != 200:
-                raise WeatherError(
-                    f"OpenWeatherMap API error: {response.status} - {await response.text()}"
-                )
-                
+            await _check_weather_response(response, location)
             return await response.json()
 
 
