@@ -1,13 +1,15 @@
 """Tests for the calculator tool."""
 
 import pytest
+from unittest.mock import patch
 from typing import Dict, Any
 
 from examples.tools.calculator_tool import (
     SafeCalculator,
     CalculatorError,
     create_calculator_tool,
-    calculator_handler
+    calculator_handler,
+    collect_input
 )
 
 
@@ -26,9 +28,11 @@ def test_safe_calculator_basic_operations() -> None:
     
     # Test division
     assert calculator.evaluate("10 / 2") == 5
+    assert calculator.evaluate("5 / 2") == 2.5  # Test floating point division
     
     # Test power
     assert calculator.evaluate("2 ** 3") == 8
+    assert calculator.evaluate("2 ** 0.5") == 2 ** 0.5  # Test fractional powers
     
     # Test negative numbers
     assert calculator.evaluate("-5") == -5
@@ -48,6 +52,23 @@ def test_safe_calculator_complex_expressions() -> None:
     
     # Test multiple operations
     assert calculator.evaluate("2 + 3 - 4 * 5 / 2") == -5
+    
+    # Test floating point operations
+    assert abs(calculator.evaluate("3.14159 * 2") - 6.28318) < 1e-5
+    assert abs(calculator.evaluate("10 / 3") - 3.33333) < 1e-5
+
+
+def test_safe_calculator_whitespace_handling() -> None:
+    """Test calculator handles whitespace correctly."""
+    calculator = SafeCalculator()
+    
+    # Test various whitespace patterns
+    assert calculator.evaluate("2+3") == 5
+    assert calculator.evaluate("2 + 3") == 5
+    assert calculator.evaluate(" 2 + 3 ") == 5
+    assert calculator.evaluate("2  +  3") == 5
+    assert calculator.evaluate("\t2\t+\t3\t") == 5
+    assert calculator.evaluate("\n2 + 3\n") == 5
 
 
 def test_safe_calculator_invalid_expressions() -> None:
@@ -65,6 +86,18 @@ def test_safe_calculator_invalid_expressions() -> None:
     # Test unsupported operations
     with pytest.raises(CalculatorError, match="Unsupported expression type"):
         calculator.evaluate("'test' + 2")
+    
+    # Test invalid characters
+    with pytest.raises(CalculatorError):
+        calculator.evaluate("2 $ 3")
+    
+    # Test empty expression
+    with pytest.raises(CalculatorError):
+        calculator.evaluate("")
+    
+    # Test only whitespace
+    with pytest.raises(CalculatorError):
+        calculator.evaluate("   ")
 
 
 def test_create_calculator_tool() -> None:
@@ -79,6 +112,7 @@ def test_create_calculator_tool() -> None:
     assert "expression" in tool.parameters
     assert tool.parameters["expression"].type == "string"
     assert tool.parameters["expression"].required is True
+    assert "mathematical expression" in tool.parameters["expression"].description.lower()
 
 
 @pytest.mark.asyncio
@@ -95,6 +129,10 @@ async def test_calculator_handler_valid_expressions() -> None:
     # Test negative numbers
     result3 = await calculator_handler({"expression": "-5 + 3"})
     assert result3 == "-2"
+    
+    # Test floating point numbers
+    result4 = await calculator_handler({"expression": "3.14 * 2"})
+    assert abs(float(result4) - 6.28) < 1e-5
 
 
 @pytest.mark.asyncio
@@ -109,9 +147,28 @@ async def test_calculator_handler_invalid_expressions() -> None:
         await calculator_handler({"expression": ""})
     
     # Test invalid expression
-    with pytest.raises(CalculatorError):
+    with pytest.raises(CalculatorError, match="Invalid expression syntax"):
         await calculator_handler({"expression": "2 +"})
     
     # Test division by zero
     with pytest.raises(CalculatorError, match="Division by zero"):
-        await calculator_handler({"expression": "1 / 0"}) 
+        await calculator_handler({"expression": "1 / 0"})
+
+
+@pytest.mark.asyncio
+async def test_collect_input() -> None:
+    """Test collecting input from user."""
+    # Test valid input
+    with patch("builtins.input", return_value="2 + 2"):
+        params = await collect_input()
+        assert params == {"expression": "2 + 2"}
+    
+    # Test empty input
+    with patch("builtins.input", return_value=""):
+        with pytest.raises(CalculatorError, match="Expression cannot be empty"):
+            await collect_input()
+    
+    # Test whitespace-only input
+    with patch("builtins.input", return_value="   "):
+        with pytest.raises(CalculatorError, match="Expression cannot be empty"):
+            await collect_input() 

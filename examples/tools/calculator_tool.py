@@ -68,6 +68,11 @@ class SafeCalculator:
         Raises:
             CalculatorError: If the expression is invalid or contains unsafe operations
         """
+        # Strip whitespace and check for empty expression
+        expression = expression.strip()
+        if not expression:
+            raise CalculatorError("Expression cannot be empty")
+            
         try:
             tree = ast.parse(expression, mode='eval')
         except SyntaxError:
@@ -174,8 +179,13 @@ async def calculator_handler(params: Dict[str, Any]) -> str:
     """
     # Get expression
     expression = params.get("expression")
-    if not expression:
+    if expression is None:
         raise CalculatorError("Expression parameter is required")
+    
+    # Strip whitespace and check for empty expression
+    expression = expression.strip()
+    if not expression:
+        raise CalculatorError("Expression cannot be empty")
         
     # Create calculator and evaluate
     calculator = SafeCalculator()
