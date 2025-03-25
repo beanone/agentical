@@ -2,6 +2,7 @@
 
 This script demonstrates how to use the OpenWeatherMap-based weather tool,
 a simple calculator tool, and a filesystem tool with the Agentical framework.
+It supports both OpenAI's GPT and Anthropic's Claude models.
 """
 
 # Standard library imports
@@ -101,18 +102,44 @@ async def _initialize_chat() -> List[Dict[str, str]]:
     }]
 
 
-async def run_llm_chat(integration: LLMToolIntegration) -> None:
-    """Run a chat with LLM using all tools.
+async def run_chat(
+    integration: Optional[LLMToolIntegration] = None,
+    *,
+    model_provider: str = "openai"
+) -> None:
+    """Run a chat with an LLM using all tools.
     
     Args:
-        integration: The LLM tool integration
+        integration: Optional pre-configured LLM tool integration
+        model_provider: The model provider to use ("openai" or "anthropic")
     """
-    if "OPENAI_API_KEY" not in os.environ:
-        print("OpenAI API key not found!")
-        print("Please set the OPENAI_API_KEY environment variable.")
+    # Map providers to their API key environment variables
+    api_key_vars = {
+        "openai": "OPENAI_API_KEY",
+        "anthropic": "ANTHROPIC_API_KEY"
+    }
+    model_names = {
+        "openai": "GPT",
+        "anthropic": "Claude"
+    }
+    
+    api_key_var = api_key_vars.get(model_provider)
+    if not api_key_var:
+        print(f"Invalid model provider: {model_provider}")
         return
         
-    print("\nStarting chat with LLM (type 'exit' to quit):")
+    if api_key_var not in os.environ:
+        print(f"{model_names[model_provider]} API key not found!")
+        print(f"Please set the {api_key_var} environment variable.")
+        return
+        
+    # Create integration if not provided
+    if integration is None:
+        registry, api_key = _setup_tools()
+        executor = _setup_executor(registry, api_key)
+        integration = LLMToolIntegration(registry, executor, model_provider=model_provider)
+        
+    print(f"\nStarting chat with {model_names[model_provider]} (type 'exit' to quit):")
     messages = await _initialize_chat()
     
     try:
@@ -132,6 +159,24 @@ async def run_llm_chat(integration: LLMToolIntegration) -> None:
             
     except Exception as e:
         print(f"Error in chat: {str(e)}")
+
+
+async def run_llm_chat(integration: Optional[LLMToolIntegration] = None) -> None:
+    """Run a chat with OpenAI's GPT using all tools.
+    
+    Args:
+        integration: Optional pre-configured LLM tool integration
+    """
+    await run_chat(integration, model_provider="openai")
+
+
+async def run_claude_chat(integration: Optional[LLMToolIntegration] = None) -> None:
+    """Run a chat with Anthropic's Claude using all tools.
+    
+    Args:
+        integration: Optional pre-configured LLM tool integration
+    """
+    await run_chat(integration, model_provider="anthropic")
 
 
 def _setup_tools() -> tuple[ToolRegistry, Optional[str]]:
@@ -191,16 +236,16 @@ async def main() -> None:
     # Set up tools and executor
     registry, api_key = _setup_tools()
     executor = _setup_executor(registry, api_key)
-    integration = LLMToolIntegration(registry, executor)
 
     # Interactive mode
     print("\nAvailable modes:")
     print("1 = Weather tool (requires API key)")
     print("2 = Calculator tool")
     print("3 = Filesystem tool")
-    print("4 = Chat with all tools")
+    print("4 = Chat with GPT (requires OpenAI API key)")
+    print("5 = Chat with Claude (requires Anthropic API key)")
     
-    mode = input("\nChoose mode (1-4): ")
+    mode = input("\nChoose mode (1-5): ")
     
     if mode == "1" and api_key:
         await run_weather_example(executor)
@@ -211,7 +256,9 @@ async def main() -> None:
     elif mode == "3":
         await run_filesystem_example(executor)
     elif mode == "4":
-        await run_llm_chat(integration)
+        await run_llm_chat()
+    elif mode == "5":
+        await run_claude_chat()
     else:
         print(f"Invalid mode: {mode}")
 
