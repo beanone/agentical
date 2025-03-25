@@ -1,0 +1,10 @@
+aiohttp
+pydantic
+openai
+anthropic
+
+pytest
+pytest-cov
+pytest-asyncio
+pytest-mock
+pytest-mock
