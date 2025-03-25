@@ -24,17 +24,12 @@ def test_register_tool() -> None:
         }
     )
     
-    # Define a handler
-    async def handler(params: Dict[str, Any]) -> str:
-        return f"Test result: {params['param1']}"
-    
     # Register the tool
-    registry.register_tool(tool, handler)
+    registry.register_tool(tool)
     
     # Verify tool is registered
-    assert "test_tool" in registry.tools
-    assert registry.tools["test_tool"] == tool
-    assert registry.handlers["test_tool"] == handler
+    assert tool.name in registry._tools
+    assert registry._tools[tool.name] == tool
 
 
 def test_register_duplicate_tool() -> None:
@@ -54,16 +49,12 @@ def test_register_duplicate_tool() -> None:
         }
     )
     
-    # Define a handler
-    async def handler(params: Dict[str, Any]) -> str:
-        return f"Test result: {params['param1']}"
-    
     # Register the tool once
-    registry.register_tool(tool, handler)
+    registry.register_tool(tool)
     
     # Try to register again
     with pytest.raises(ValueError):
-        registry.register_tool(tool, handler)
+        registry.register_tool(tool)
 
 
 def test_get_tool() -> None:
@@ -83,10 +74,7 @@ def test_get_tool() -> None:
         }
     )
     
-    async def handler(params: Dict[str, Any]) -> str:
-        return f"Test result: {params['param1']}"
-    
-    registry.register_tool(tool, handler)
+    registry.register_tool(tool)
     
     # Get the tool
     retrieved_tool = registry.get_tool("test_tool")
@@ -99,41 +87,6 @@ def test_get_nonexistent_tool() -> None:
     
     with pytest.raises(KeyError):
         registry.get_tool("nonexistent_tool")
-
-
-def test_get_handler() -> None:
-    """Test getting a registered handler."""
-    registry = ToolRegistry()
-    
-    # Create and register a test tool
-    tool = Tool(
-        name="test_tool",
-        description="A test tool",
-        parameters={
-            "param1": ToolParameter(
-                type="string",
-                description="Test parameter",
-                required=True
-            )
-        }
-    )
-    
-    async def handler(params: Dict[str, Any]) -> str:
-        return f"Test result: {params['param1']}"
-    
-    registry.register_tool(tool, handler)
-    
-    # Get the handler
-    retrieved_handler = registry.get_handler("test_tool")
-    assert retrieved_handler == handler
-
-
-def test_get_nonexistent_handler() -> None:
-    """Test that getting a nonexistent handler raises an error."""
-    registry = ToolRegistry()
-    
-    with pytest.raises(KeyError):
-        registry.get_handler("nonexistent_tool")
 
 
 def test_get_openai_tools() -> None:
@@ -165,17 +118,11 @@ def test_get_openai_tools() -> None:
         }
     )
     
-    async def handler1(params: Dict[str, Any]) -> str:
-        return f"Test result 1: {params['param1']}"
-        
-    async def handler2(params: Dict[str, Any]) -> str:
-        return f"Test result 2: {params.get('param2', 'default')}"
-    
-    registry.register_tool(tool1, handler1)
-    registry.register_tool(tool2, handler2)
+    registry.register_tool(tool1)
+    registry.register_tool(tool2)
     
     # Get OpenAI tools
-    openai_tools = registry.get_openai_tools()
+    openai_tools = registry.to_openai_format()
     
     # Verify format
     assert len(openai_tools) == 2

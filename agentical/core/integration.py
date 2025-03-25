@@ -21,7 +21,8 @@ class LLMToolIntegration:
         self, 
         registry: ToolRegistry, 
         executor: ToolExecutor,
-        model_provider: Literal["openai", "anthropic"] = "openai"
+        model_provider: Literal["openai", "anthropic"] = "openai",
+        client: Optional[Any] = None
     ) -> None:
         """Initialize LLM tool integration.
         
@@ -29,30 +30,35 @@ class LLMToolIntegration:
             registry: The tool registry containing available tools
             executor: The tool executor for handling tool calls
             model_provider: The LLM provider to use
+            client: Optional pre-configured client (useful for testing)
         """
         self.registry = registry
         self.executor = executor
         self.model_provider = model_provider
         
-        # Initialize the appropriate client based on the model provider
-        if model_provider == "openai":
-            # Lazy import to avoid requiring OpenAI if not used
-            try:
-                from openai import AsyncOpenAI
-                self.client = AsyncOpenAI()
-            except ImportError:
-                self.client = None
-                print("Warning: OpenAI package not installed. Please install with 'pip install openai'")
-        elif model_provider == "anthropic":
-            # Lazy import to avoid requiring Anthropic if not used
-            try:
-                from anthropic import AsyncAnthropic
-                self.client = AsyncAnthropic()
-            except ImportError:
-                self.client = None
-                print("Warning: Anthropic package not installed. Please install with 'pip install anthropic'")
+        # Use provided client or initialize a new one
+        if client is not None:
+            self.client = client
         else:
-            raise ValueError(f"Unsupported model provider: {model_provider}")
+            # Initialize the appropriate client based on the model provider
+            if model_provider == "openai":
+                # Lazy import to avoid requiring OpenAI if not used
+                try:
+                    from openai import AsyncOpenAI
+                    self.client = AsyncOpenAI()
+                except ImportError:
+                    self.client = None
+                    print("Warning: OpenAI package not installed. Please install with 'pip install openai'")
+            elif model_provider == "anthropic":
+                # Lazy import to avoid requiring Anthropic if not used
+                try:
+                    from anthropic import AsyncAnthropic
+                    self.client = AsyncAnthropic()
+                except ImportError:
+                    self.client = None
+                    print("Warning: Anthropic package not installed. Please install with 'pip install anthropic'")
+            else:
+                raise ValueError(f"Unsupported model provider: {model_provider}")
     
     async def run_conversation(
         self, 

@@ -4,6 +4,7 @@ import pytest
 from typing import Dict, Any, List
 
 from agentical.core import ToolRegistry, ToolExecutor
+from agentical.core.executor import ToolExecutionError
 from agentical.types import Tool, ToolParameter, ToolCall
 
 
@@ -37,24 +38,29 @@ def registry() -> ToolRegistry:
         }
     )
     
-    # Define handlers
-    async def handler1(params: Dict[str, Any]) -> str:
-        return f"Test result 1: {params['param1']}"
-        
-    async def handler2(params: Dict[str, Any]) -> str:
-        return f"Test result 2: {params.get('param2', 'default')}"
-    
     # Register tools
-    registry.register_tool(tool1, handler1)
-    registry.register_tool(tool2, handler2)
+    registry.register_tool(tool1)
+    registry.register_tool(tool2)
     
     return registry
 
 
 @pytest.fixture
 def executor(registry: ToolRegistry) -> ToolExecutor:
-    """Create a test executor."""
-    return ToolExecutor(registry)
+    """Create a test executor with registered handlers."""
+    executor = ToolExecutor(registry)
+    
+    # Define and register handlers
+    async def handler1(params: Dict[str, Any]) -> str:
+        return f"Test result 1: {params['param1']}"
+        
+    async def handler2(params: Dict[str, Any]) -> str:
+        return f"Test result 2: {params.get('param2', 'default')}"
+    
+    executor.register_handler("tool1", handler1)
+    executor.register_handler("tool2", handler2)
+    
+    return executor
 
 
 @pytest.mark.asyncio
@@ -83,7 +89,7 @@ async def test_execute_nonexistent_tool(executor: ToolExecutor) -> None:
 @pytest.mark.asyncio
 async def test_execute_tool_missing_required_param(executor: ToolExecutor) -> None:
     """Test that executing a tool without a required parameter raises an error."""
-    with pytest.raises(KeyError):
+    with pytest.raises(ToolExecutionError):
         await executor.execute_tool("tool1", {})
 
 
@@ -91,22 +97,22 @@ async def test_execute_tool_missing_required_param(executor: ToolExecutor) -> No
 async def test_execute_tool_calls(executor: ToolExecutor) -> None:
     """Test executing multiple tool calls."""
     # Create test tool calls
-    tool_calls: List[ToolCall] = [
-        ToolCall(
-            id="call1",
-            name="tool1",
-            arguments={"param1": "test1"}
-        ),
-        ToolCall(
-            id="call2",
-            name="tool2",
-            arguments={"param2": 42}
-        ),
-        ToolCall(
-            id="call3",
-            name="tool2",
-            arguments={}
-        )
+    tool_calls: List[Dict[str, Any]] = [
+        {
+            "id": "call1",
+            "name": "tool1",
+            "arguments": {"param1": "test1"}
+        },
+        {
+            "id": "call2",
+            "name": "tool2",
+            "arguments": {"param2": 42}
+        },
+        {
+            "id": "call3",
+            "name": "tool2",
+            "arguments": {}
+        }
     ]
     
     # Execute tool calls
@@ -115,25 +121,25 @@ async def test_execute_tool_calls(executor: ToolExecutor) -> None:
     # Verify results
     assert len(results) == 3
     
-    assert results[0].id == "call1"
-    assert results[0].output == "Test result 1: test1"
+    assert results[0]["id"] == "call1"
+    assert results[0]["output"] == "Test result 1: test1"
     
-    assert results[1].id == "call2"
-    assert results[1].output == "Test result 2: 42"
+    assert results[1]["id"] == "call2"
+    assert results[1]["output"] == "Test result 2: 42"
     
-    assert results[2].id == "call3"
-    assert results[2].output == "Test result 2: default"
+    assert results[2]["id"] == "call3"
+    assert results[2]["output"] == "Test result 2: default"
 
 
 @pytest.mark.asyncio
 async def test_execute_tool_calls_with_error(executor: ToolExecutor) -> None:
     """Test that executing tool calls with an invalid tool raises an error."""
     tool_calls = [
-        ToolCall(
-            id="call1",
-            name="nonexistent_tool",
-            arguments={}
-        )
+        {
+            "id": "call1",
+            "name": "nonexistent_tool",
+            "arguments": {}
+        }
     ]
     
     with pytest.raises(KeyError):

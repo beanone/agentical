@@ -3,8 +3,8 @@
 This module provides the executor for running tools with parameter validation.
 """
 
-from typing import Dict, Any, Callable, Awaitable, Optional
-from agentical.types import Tool, ToolResult, ToolHandler
+from typing import Dict, Any, Callable, Awaitable, Optional, List
+from agentical.types import Tool, ToolResult, ToolHandler, ToolCall
 from agentical.core.registry import ToolRegistry
 
 
@@ -83,6 +83,28 @@ class ToolExecutor:
             return await handler(parameters)
         except Exception as e:
             raise ToolExecutionError(f"Error executing tool '{name}': {str(e)}") from e
+            
+    async def execute_tool_calls(self, tool_calls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Execute multiple tool calls and return their results.
+        
+        Args:
+            tool_calls: List of tool calls to execute
+            
+        Returns:
+            List of results, each containing the tool call ID and output
+            
+        Raises:
+            KeyError: If any tool does not exist
+            ToolExecutionError: If there is an error executing any tool
+        """
+        results = []
+        for call in tool_calls:
+            output = await self.execute_tool(call["name"], call["arguments"])
+            results.append({
+                "id": call["id"],
+                "output": output
+            })
+        return results
             
     def _validate_parameters(self, tool: Tool, parameters: Dict[str, Any]) -> None:
         """Validate parameters against tool definition.

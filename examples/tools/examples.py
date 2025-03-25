@@ -67,23 +67,6 @@ async def run_calculator_example(executor: ToolExecutor) -> None:
         print(f"Unexpected error: {str(e)}")
 
 
-async def _collect_multiline_input() -> str:
-    """Collect multiline input from user.
-    
-    Returns:
-        The collected input as a string
-    """
-    print("Enter content (end with Ctrl+D on a new line):")
-    content_lines = []
-    try:
-        while True:
-            line = input()
-            content_lines.append(line)
-    except EOFError:
-        pass
-    return "\n".join(content_lines)
-
-
 async def run_filesystem_example(executor: ToolExecutor) -> None:
     """Run a filesystem-only example.
     
