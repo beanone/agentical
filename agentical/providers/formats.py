@@ -4,7 +4,7 @@ This module provides base classes and utilities for defining tools.
 """
 
 from typing import Dict, Any
-from agentical.types import Tool
+from agentical.core.types import Tool
 
 
 def to_openai_format(tool: Tool) -> Dict[str, Any]:

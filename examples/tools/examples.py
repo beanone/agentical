@@ -13,7 +13,7 @@ from typing import Dict, Any, List, Optional
 # Local imports
 from agentical.core.registry import ToolRegistry
 from agentical.core.executor import ToolExecutor
-from agentical.core.integration import LLMToolIntegration
+from agentical.providers.llm import LLMToolIntegration
 from .weather_tool import (
     create_weather_tool, 
     weather_handler, 

@@ -4,8 +4,8 @@ from typing import Dict, Any
 
 import pytest
 
-from agentical.types import Tool, ToolParameter
-from agentical.core.tool import to_openai_format, to_anthropic_format
+from agentical.core.types import Tool, ToolParameter
+from agentical.providers.formats import to_openai_format, to_anthropic_format
 
 
 def create_test_tool(

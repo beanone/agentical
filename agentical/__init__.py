@@ -3,7 +3,7 @@
 This package provides a framework for building tool-enabled AI agents.
 """
 
-from agentical.types import (
+from agentical.core.types import (
     Tool,
     ToolParameter,
     ToolResult,
@@ -11,7 +11,8 @@ from agentical.types import (
     ToolCall,
     Message
 )
-from agentical.core import ToolRegistry, ToolExecutor, LLMToolIntegration
+from agentical.core import ToolRegistry, ToolExecutor
+from agentical.providers.llm import LLMToolIntegration
 
 __all__ = [
     "Tool",

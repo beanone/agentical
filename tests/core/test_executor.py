@@ -2,10 +2,11 @@
 
 import pytest
 from typing import Dict, Any, List
+import asyncio
 
 from agentical.core import ToolRegistry, ToolExecutor
 from agentical.core.executor import ToolExecutionError
-from agentical.types import Tool, ToolParameter, ToolCall
+from agentical.core.types import Tool, ToolParameter, ToolCall
 
 
 @pytest.fixture

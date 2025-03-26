@@ -4,7 +4,7 @@ This module provides a registry for managing tool definitions.
 """
 
 from typing import Dict, List, Any, Union
-from agentical.types import Tool
+from agentical.core.types import Tool
 
 
 class ToolRegistry:
@@ -59,74 +59,4 @@ class ToolRegistry:
         Returns:
             List of all registered tool definitions
         """
-        return list(self._tools.values())
-        
-    def to_openai_format(self) -> List[Dict[str, Any]]:
-        """Convert registered tools to OpenAI's function format.
-        
-        Returns:
-            List of tools in OpenAI's function format
-        """
-        openai_tools = []
-        for tool in self._tools.values():
-            openai_tool = {
-                "type": "function",
-                "function": {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "parameters": {
-                        "type": "object",
-                        "properties": {},
-                        "required": []
-                    }
-                }
-            }
-            
-            # Convert parameters
-            for name, param in tool.parameters.items():
-                openai_tool["function"]["parameters"]["properties"][name] = {
-                    "type": param.type,
-                    "description": param.description
-                }
-                if param.enum:
-                    openai_tool["function"]["parameters"]["properties"][name]["enum"] = param.enum
-                if param.required:
-                    openai_tool["function"]["parameters"]["required"].append(name)
-                    
-            openai_tools.append(openai_tool)
-            
-        return openai_tools
-        
-    def to_anthropic_format(self) -> List[Dict[str, Any]]:
-        """Convert registered tools to Anthropic's tool format.
-        
-        Returns:
-            List of tools in Anthropic's tool format
-        """
-        anthropic_tools = []
-        for tool in self._tools.values():
-            anthropic_tool = {
-                "type": "function",
-                "name": tool.name,
-                "description": tool.description,
-                "parameters": {
-                    "type": "object",
-                    "properties": {},
-                    "required": []
-                }
-            }
-            
-            # Convert parameters
-            for name, param in tool.parameters.items():
-                anthropic_tool["parameters"]["properties"][name] = {
-                    "type": param.type,
-                    "description": param.description
-                }
-                if param.enum:
-                    anthropic_tool["parameters"]["properties"][name]["enum"] = param.enum
-                if param.required:
-                    anthropic_tool["parameters"]["required"].append(name)
-                    
-            anthropic_tools.append(anthropic_tool)
-            
-        return anthropic_tools 
+        return list(self._tools.values()) 

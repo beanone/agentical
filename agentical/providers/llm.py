@@ -8,13 +8,14 @@ from typing import Dict, List, Any, Optional, Union, Literal
 
 from agentical.core.registry import ToolRegistry
 from agentical.core.executor import ToolExecutor
+from agentical.providers.formats import to_openai_format, to_anthropic_format
 
 
 class LLMToolIntegration:
     """Integration between LLM and tools.
     
-    This class provides the integration layer between LLMs (like OpenAI's GPT or 
-    Anthropic's Claude) and the tool execution framework.
+    This class provides the integration layer between LLMs 
+    (like OpenAI's GPT) and the tool execution framework.
     """
     
     def __init__(
@@ -97,7 +98,7 @@ class LLMToolIntegration:
         Returns:
             The model's response
         """
-        tools = self.registry.to_openai_format()
+        tools = [to_openai_format(tool) for tool in self.registry.list_tools()]
         
         response = await self.client.chat.completions.create(
             model=model,
@@ -153,7 +154,7 @@ class LLMToolIntegration:
         Returns:
             The model's response
         """
-        tools = self.registry.to_anthropic_format()
+        tools = [to_anthropic_format(tool) for tool in self.registry.list_tools()]
         
         # Convert messages to Anthropic format if needed
         anthropic_messages = []

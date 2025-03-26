@@ -1,11 +1,13 @@
 """Tests for the LLMToolIntegration class."""
 
-import pytest
+import json
 from typing import Dict, Any, List
+import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from agentical.core import LLMToolIntegration, ToolRegistry, ToolExecutor
-from agentical.types import Tool, ToolParameter
+from agentical.core import ToolRegistry, ToolExecutor
+from agentical.core.types import Tool, ToolParameter
+from agentical.providers.llm import LLMToolIntegration
 
 
 @pytest.fixture

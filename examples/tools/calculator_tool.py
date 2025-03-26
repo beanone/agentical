@@ -28,10 +28,10 @@ Examples:
 """
 
 import ast
-import operator
+import operator as op
 from typing import Dict, Any, Union, Optional
 
-from agentical.types import Tool, ToolParameter
+from agentical.core.types import Tool, ToolParameter
 
 
 class CalculatorError(Exception):
@@ -48,12 +48,12 @@ class SafeCalculator:
     
     # Supported operators
     _OPERATORS = {
-        ast.Add: operator.add,
-        ast.Sub: operator.sub,
-        ast.Mult: operator.mul,
-        ast.Div: operator.truediv,
-        ast.Pow: operator.pow,
-        ast.USub: operator.neg,
+        ast.Add: op.add,
+        ast.Sub: op.sub,
+        ast.Mult: op.mul,
+        ast.Div: op.truediv,
+        ast.Pow: op.pow,
+        ast.USub: op.neg,
     }
     
     def evaluate(self, expression: str) -> Union[int, float]:

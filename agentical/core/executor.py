@@ -1,10 +1,10 @@
 """Tool Executor for Simple Agentical Framework.
 
-This module provides the executor for running tools with parameter validation.
+This module provides execution of tools based on their definitions.
 """
 
 from typing import Dict, Any, Callable, Awaitable, Optional, List
-from agentical.types import Tool, ToolResult, ToolHandler, ToolCall
+from agentical.core.types import Tool, ToolResult, ToolHandler, ToolCall
 from agentical.core.registry import ToolRegistry
 
 
