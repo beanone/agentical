@@ -1,11 +1,11 @@
-"""Tests for the tool module."""
-
-from typing import Dict, Any
+"""Tests for the tool format conversion functions."""
 
 import pytest
+from typing import Dict, Any, List
+from enum import Enum
 
 from agentical.core.types import Tool, ToolParameter
-from agentical.providers.formats import to_openai_format, to_anthropic_format
+from agentical.providers.formats import to_openai_format, to_anthropic_format  # Internal import for testing
 
 
 def create_test_tool(
