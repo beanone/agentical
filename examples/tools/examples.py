@@ -36,11 +36,13 @@ ModelProvider = Literal["openai", "anthropic"]
 PROVIDER_CONFIG = {
     "openai": {
         "api_key_env": "OPENAI_API_KEY",
-        "display_name": "GPT"
+        "display_name": "GPT",
+        "default_model": "gpt-4-turbo-preview"
     },
     "anthropic": {
         "api_key_env": "ANTHROPIC_API_KEY",
-        "display_name": "Claude"
+        "display_name": "Claude",
+        "default_model": "claude-3-sonnet-20240229"
     }
 }
 
@@ -52,8 +54,7 @@ SYSTEM_PROMPT = (
 )
 
 # Local imports
-from agentical.core.registry import ToolRegistry
-from agentical.core.executor import ToolExecutor
+from agentical.core import ToolRegistry, ToolExecutor, ProviderConfig
 from agentical.providers.llm import LLMToolIntegration
 from .weather_tool import (
     create_weather_tool, 
@@ -200,7 +201,19 @@ async def run_chat(
         try:
             registry, api_key = _setup_tools()
             executor = _setup_executor(registry, api_key)
-            integration = LLMToolIntegration(registry, executor, model_provider=model_provider)
+            
+            # Create provider config
+            provider_config = ProviderConfig(
+                api_key=os.environ[config["api_key_env"]],
+                model=config["default_model"]
+            )
+            
+            integration = LLMToolIntegration(
+                registry=registry,
+                executor=executor,
+                provider_config=provider_config,
+                model_provider=model_provider
+            )
         except Exception as e:
             print(f"Failed to initialize LLM integration: {str(e)}")
             return

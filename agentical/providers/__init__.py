@@ -6,7 +6,9 @@ This module contains implementations for various providers and integrations:
 """
 
 from .llm import LLMToolIntegration
+from .default_provider_registry import DefaultProviderRegistry
 
 __all__ = [
-    "LLMToolIntegration"
+    "LLMToolIntegration",
+    "DefaultProviderRegistry"
 ]

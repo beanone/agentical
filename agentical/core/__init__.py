@@ -1,13 +1,10 @@
-"""Core functionality for the Agentical framework.
+"""Core module for Agentical framework."""
 
-This module provides the fundamental building blocks:
-- Type definitions for tools and messages
-- Tool registry for managing available tools
-- Tool executor for safe tool operations
-"""
-
-from .registry import ToolRegistry
 from .executor import ToolExecutor
+from .provider import Provider
+from .provider_registry import ProviderRegistry
+from .provider_config import ProviderConfig, ProviderSettings, ProviderError
+from .registry import ToolRegistry
 from .types import (
     Tool,
     ToolParameter,
@@ -25,5 +22,10 @@ __all__ = [
     "ToolCall",
     "Message",
     "ToolRegistry",
-    "ToolExecutor"
+    "ToolExecutor",
+    "Provider",
+    "ProviderRegistry",
+    "ProviderConfig",
+    "ProviderSettings",
+    "ProviderError"
 ]
