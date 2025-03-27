@@ -35,30 +35,6 @@ def provider(config, executor):
     return OpenAIProvider(config, executor)
 
 
-@pytest.fixture
-def sample_tools(base_tool, base_tool_parameter):
-    """Fixture for sample tools."""
-    return [
-        base_tool(
-            name="test_tool",
-            description="A test tool",
-            parameters={
-                "param1": base_tool_parameter(
-                    param_type="string",
-                    description="Test parameter",
-                    required=True
-                ),
-                "param2": base_tool_parameter(
-                    param_type="integer",
-                    description="Optional parameter",
-                    required=False,
-                    enum=["1", "2", "3"]  # Enum values must be strings
-                )
-            }
-        )
-    ]
-
-
 def test_initialization_success(config, executor):
     """Test successful provider initialization."""
     provider = OpenAIProvider(config, executor)
@@ -101,29 +77,43 @@ def test_format_tools(provider, sample_tools):
     """Test tool formatting."""
     formatted = provider._format_tools(sample_tools)
     
-    assert len(formatted) == 1
-    tool = formatted[0]
+    assert len(formatted) == 2
     
-    assert tool["type"] == "function"
-    assert tool["function"]["name"] == "test_tool"
-    assert tool["function"]["description"] == "A test tool"
+    # Test first tool
+    tool1 = formatted[0]
+    assert tool1["type"] == "function"
+    assert tool1["function"]["name"] == "test_tool"
+    assert tool1["function"]["description"] == "A test tool for demonstration"
     
-    params = tool["function"]["parameters"]
-    assert params["type"] == "object"
-    assert "param1" in params["properties"]
-    assert "param2" in params["properties"]
-    assert params["properties"]["param1"]["type"] == "string"
-    assert params["properties"]["param2"]["type"] == "integer"
-    assert params["properties"]["param2"]["enum"] == ["1", "2", "3"]  # Enum values are strings
-    assert "param1" in params["required"]
-    assert "param2" not in params["required"]
+    params1 = tool1["function"]["parameters"]
+    assert params1["type"] == "object"
+    assert "param1" in params1["properties"]
+    assert "param2" in params1["properties"]
+    assert params1["properties"]["param1"]["type"] == "string"
+    assert params1["properties"]["param2"]["type"] == "integer"
+    assert params1["properties"]["param2"]["enum"] == ["1", "2", "3"]
+    assert "param1" in params1["required"]
+    assert "param2" not in params1["required"]
+    
+    # Test second tool
+    tool2 = formatted[1]
+    assert tool2["type"] == "function"
+    assert tool2["function"]["name"] == "another_tool"
+    assert tool2["function"]["description"] == "Another test tool with different parameters"
+    
+    params2 = tool2["function"]["parameters"]
+    assert params2["type"] == "object"
+    assert "param3" in params2["properties"]
+    assert "param4" in params2["properties"]
+    assert params2["properties"]["param3"]["type"] == "boolean"
+    assert params2["properties"]["param4"]["type"] == "array"
+    assert "param3" in params2["required"]
+    assert "param4" not in params2["required"]
 
 
 @pytest.mark.asyncio
-async def test_run_conversation_simple(provider, sample_tools):
+async def test_run_conversation_simple(provider, sample_tools, sample_messages):
     """Test running a simple conversation without tool calls."""
-    messages = [{"role": "user", "content": "Hello"}]
-    
     mock_response = Mock()
     mock_response.choices = [
         Mock(message=Mock(content="Hello there!", tool_calls=None))
@@ -131,26 +121,26 @@ async def test_run_conversation_simple(provider, sample_tools):
     
     with patch.object(provider._client.chat.completions, 'create', 
                      AsyncMock(return_value=mock_response)):
-        response = await provider.run_conversation(messages, sample_tools)
+        response = await provider.run_conversation(sample_messages, sample_tools)
         
         assert response == "Hello there!"
         provider._client.chat.completions.create.assert_called_once_with(
             model=provider.config.model,
-            messages=messages,
+            messages=sample_messages,
             tools=provider._format_tools(sample_tools)
         )
 
 
 @pytest.mark.asyncio
-async def test_run_conversation_with_tool_call(provider, sample_tools, executor, mock_async_handler):
+async def test_run_conversation_with_tool_call(provider, sample_tools, sample_tool_calls):
     """Test running a conversation with tool calls."""
     messages = [{"role": "user", "content": "Use the tool"}]
     
     # Mock the tool call response
     tool_call = Mock()
-    tool_call.id = "call_123"
-    tool_call.function.name = "test_tool"
-    tool_call.function.arguments = json.dumps({"param1": "test"})
+    tool_call.id = sample_tool_calls["test_tool"]["id"]
+    tool_call.function.name = sample_tool_calls["test_tool"]["name"]
+    tool_call.function.arguments = json.dumps(sample_tool_calls["test_tool"]["parameters"])
     
     mock_responses = [
         Mock(choices=[
@@ -176,15 +166,15 @@ async def test_run_conversation_with_tool_call(provider, sample_tools, executor,
 
 
 @pytest.mark.asyncio
-async def test_run_conversation_tool_error(provider, sample_tools, executor, mock_async_handler):
+async def test_run_conversation_tool_error(provider, sample_tools, sample_tool_calls, sample_tool_results):
     """Test handling of tool execution errors."""
     messages = [{"role": "user", "content": "Use the tool"}]
     
     # Mock the tool call response
     tool_call = Mock()
-    tool_call.id = "call_123"
-    tool_call.function.name = "test_tool"
-    tool_call.function.arguments = json.dumps({"param1": "test"})
+    tool_call.id = sample_tool_calls["test_tool"]["id"]
+    tool_call.function.name = sample_tool_calls["test_tool"]["name"]
+    tool_call.function.arguments = json.dumps(sample_tool_calls["test_tool"]["parameters"])
     
     mock_response = Mock(choices=[
         Mock(message=Mock(
@@ -194,8 +184,8 @@ async def test_run_conversation_tool_error(provider, sample_tools, executor, moc
     ])
     
     # Configure executor with error handler
-    error_handler = mock_async_handler(error=Exception("Tool execution failed"))
-    executor.register_handler("test_tool", error_handler)
+    error_handler = Mock(side_effect=Exception(sample_tool_results["test_tool"]["error"]))
+    provider.executor.register_handler("test_tool", error_handler)
     
     with patch.object(provider._client.chat.completions, 'create',
                      AsyncMock(return_value=mock_response)):

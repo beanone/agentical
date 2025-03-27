@@ -254,4 +254,130 @@ def base_tool_registry():
         for tool in tools:
             registry.register_tool(tool)
         return registry
-    return _make_registry 
+    return _make_registry
+
+
+@pytest.fixture
+def sample_messages():
+    """Fixture for sample conversation messages.
+    
+    Returns:
+        List[Dict[str, str]]: A list of sample conversation messages.
+        
+    Example:
+        def test_something(sample_messages):
+            messages = sample_messages
+            # messages will contain a system message and some user/assistant exchanges
+    """
+    return [
+        {"role": "system", "content": "You are a helpful AI assistant."},
+        {"role": "user", "content": "Hello, can you help me?"},
+        {"role": "assistant", "content": "Of course! What can I help you with?"},
+        {"role": "user", "content": "I need to use a tool."}
+    ]
+
+
+@pytest.fixture
+def sample_tools(base_tool, base_tool_parameter):
+    """Fixture for sample tools.
+    
+    Returns:
+        List[Tool]: A list of sample tools for testing.
+        
+    Example:
+        def test_something(sample_tools):
+            tools = sample_tools
+            # tools will contain test_tool and another_tool with predefined parameters
+    """
+    return [
+        base_tool(
+            name="test_tool",
+            description="A test tool for demonstration",
+            parameters={
+                "param1": base_tool_parameter(
+                    param_type="string",
+                    description="A required string parameter",
+                    required=True
+                ),
+                "param2": base_tool_parameter(
+                    param_type="integer",
+                    description="An optional integer parameter with enum values",
+                    required=False,
+                    enum=["1", "2", "3"]
+                )
+            }
+        ),
+        base_tool(
+            name="another_tool",
+            description="Another test tool with different parameters",
+            parameters={
+                "param3": base_tool_parameter(
+                    param_type="boolean",
+                    description="A boolean parameter with default value",
+                    required=True,
+                    default=False
+                ),
+                "param4": base_tool_parameter(
+                    param_type="array",
+                    description="An optional array parameter",
+                    required=False
+                )
+            }
+        )
+    ]
+
+
+@pytest.fixture
+def sample_tool_results():
+    """Fixture for sample tool execution results.
+    
+    Returns:
+        Dict[str, Any]: A dictionary of sample tool results.
+        
+    Example:
+        def test_something(sample_tool_results):
+            results = sample_tool_results
+            # results will contain predefined outputs for test_tool and another_tool
+    """
+    return {
+        "test_tool": {
+            "success": "Tool executed successfully with param1=test",
+            "error": "Failed to execute test_tool: Invalid parameters"
+        },
+        "another_tool": {
+            "success": "Another tool completed with param3=True",
+            "error": "Failed to execute another_tool: Missing required parameter"
+        }
+    }
+
+
+@pytest.fixture
+def sample_tool_calls():
+    """Fixture for sample tool call data.
+    
+    Returns:
+        Dict[str, Dict[str, Any]]: A dictionary of sample tool call data.
+        
+    Example:
+        def test_something(sample_tool_calls):
+            calls = sample_tool_calls
+            # calls will contain predefined tool call data for test_tool and another_tool
+    """
+    return {
+        "test_tool": {
+            "id": "call_123",
+            "name": "test_tool",
+            "parameters": {
+                "param1": "test_value",
+                "param2": 1
+            }
+        },
+        "another_tool": {
+            "id": "call_456",
+            "name": "another_tool",
+            "parameters": {
+                "param3": True,
+                "param4": ["item1", "item2"]
+            }
+        }
+    } 
