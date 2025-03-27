@@ -6,6 +6,10 @@ from anthropic import AsyncAnthropic
 from agentical.core import Tool
 from agentical.core import Provider, ProviderConfig, ProviderError
 from agentical.core import ToolExecutor
+import traceback
+
+# Default max tokens for responses
+DEFAULT_MAX_TOKENS = 4096
 
 class AnthropicProvider(Provider):
     """Anthropic provider implementation."""
@@ -74,50 +78,44 @@ class AnthropicProvider(Provider):
                 model=self.config.model,
                 system=system_message,
                 messages=anthropic_messages,
-                tools=formatted_tools
+                tools=formatted_tools,
+                max_tokens=DEFAULT_MAX_TOKENS
             )
             
-            # Extract the text content from the response
-            content = response.content[0].text
+            # Extract content blocks
+            content_blocks = response.content
             
-            # Check if the model wanted to call a tool
-            if response.tool_calls:
-                for tool_call in response.tool_calls:
-                    tool_name = tool_call.name
-                    tool_input = tool_call.input
-                    
+            # Combine text blocks and handle tool use blocks
+            result_text = []
+            for block in content_blocks:
+                if block.type == 'text':
+                    result_text.append(block.text)
+                elif block.type == 'tool_use':
+                    # Execute the tool
                     tool_output = await self.executor.execute_tool(
-                        tool_name, tool_input
+                        block.name, block.input
                     )
                     
                     # Add the tool call and output to the messages
                     anthropic_messages.append({
                         "role": "assistant", 
-                        "content": "",
-                        "tool_calls": [{
-                            "id": tool_call.id,
-                            "name": tool_name, 
-                            "input": tool_input
-                        }]
+                        "content": f"I'll use the {block.name} tool with input: {block.input}"
                     })
                     anthropic_messages.append({
                         "role": "user",
-                        "content": "",
-                        "tool_results": [{
-                            "tool_call_id": tool_call.id,
-                            "content": str(tool_output)
-                        }]
+                        "content": f"Tool {block.name} returned: {str(tool_output)}"
                     })
-                
-                # Get a new response from the model with system message at the start
-                return await self.run_conversation(
-                    [{"role": "system", "content": system_message}] + anthropic_messages, 
-                    tools
-                )
+                    
+                    # Get a new response with the tool result
+                    return await self.run_conversation(
+                        [{"role": "system", "content": system_message}] + anthropic_messages, 
+                        tools
+                    )
             
-            return content
+            return " ".join(result_text)
             
         except Exception as e:
+            traceback.print_exc()
             raise ProviderError(f"Error in Anthropic conversation: {str(e)}")
     
     def _format_tools(self, tools: List[Tool]) -> List[Dict[str, Any]]:
@@ -125,27 +123,25 @@ class AnthropicProvider(Provider):
         formatted_tools = []
         for tool in tools:
             formatted_tool = {
-                "type": "function",
-                "function": {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "parameters": {
-                        "type": "object",
-                        "properties": {},
-                        "required": []
-                    }
+                "type": "custom",
+                "name": tool.name,
+                "description": tool.description,
+                "input_schema": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
                 }
             }
             
             for param_name, param in tool.parameters.items():
-                formatted_tool["function"]["parameters"]["properties"][param_name] = {
+                formatted_tool["input_schema"]["properties"][param_name] = {
                     "type": param.type,
                     "description": param.description
                 }
                 if param.required:
-                    formatted_tool["function"]["parameters"]["required"].append(param_name)
+                    formatted_tool["input_schema"]["required"].append(param_name)
                 if param.enum:
-                    formatted_tool["function"]["parameters"]["properties"][param_name]["enum"] = param.enum
+                    formatted_tool["input_schema"]["properties"][param_name]["enum"] = param.enum
             
             formatted_tools.append(formatted_tool)
         
