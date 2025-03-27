@@ -8,6 +8,7 @@ from typing import Optional, Dict, Any, Literal
 from pydantic import Field, ConfigDict
 from pydantic_settings import BaseSettings
 from dataclasses import dataclass, field
+import os
 
 from .errors import ConfigError
 
@@ -47,12 +48,21 @@ class ProviderSettings(BaseSettings):
     gemini_model: Optional[str] = Field(None, description="Gemini model name")
     gemini_base_url: Optional[str] = Field(None, description="Optional Gemini API base URL")
     
-    def __init__(self, env_file: Optional[str] = ".env", **kwargs):
-        super().__init__(env_file=env_file, **kwargs)
+    def __init__(self, env_file: Optional[str] = None, **kwargs):
+        """Initialize settings with optional custom .env file path.
+        
+        Args:
+            env_file: Optional path to .env file. If not provided, defaults to ".env"
+            **kwargs: Additional keyword arguments passed to BaseSettings
+        """
+        # Always update env_file in model_config, even if None
+        self.model_config.update({"env_file": env_file})
+        super().__init__(**kwargs)
     
-    # Configuration using ConfigDict
     model_config = ConfigDict(
         case_sensitive=False,
+        env_file=".env",
+        env_file_encoding="utf-8",
         extra="allow"  # Allow extra fields for future extensibility
     )
 

@@ -77,4 +77,7 @@ warn_unreachable = true
 asyncio_mode = "auto"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = "-v --cov=agentical --cov-report=term-missing" 
+addopts = "-v --cov=agentical --cov-report=term-missing"
+markers = [
+    "integration: marks tests that require external services",
+] 
