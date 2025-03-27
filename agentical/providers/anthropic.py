@@ -26,8 +26,6 @@ class AnthropicProvider(Provider):
         """
         self.config = config
         self.executor = executor
-        if not config.model:
-            config.model = "claude-3-sonnet-20240229"
             
         try:
             self._client = AsyncAnthropic(api_key=config.api_key)

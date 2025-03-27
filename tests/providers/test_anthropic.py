@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import Mock, patch, AsyncMock, call
 import json
 
-from agentical.core import ProviderConfig, ToolExecutor, Tool, ToolParameter, ProviderError
+from agentical.core import ProviderConfig, ToolExecutor, Tool, ToolParameter, ProviderError, ProviderSettings
 from agentical.providers.anthropic import AnthropicProvider
 
 
@@ -30,32 +30,32 @@ def provider(config, executor):
 
 
 @pytest.fixture
-def sample_tools():
+def sample_tools(base_tool, base_tool_parameter):
     """Fixture for sample tools."""
     return [
-        Tool(
+        base_tool(
             name="test_tool",
             description="A test tool",
             parameters={
-                "param1": ToolParameter(
-                    type="string",
+                "param1": base_tool_parameter(
+                    param_type="string",
                     description="Test parameter",
                     required=True
                 ),
-                "param2": ToolParameter(
-                    type="integer",
+                "param2": base_tool_parameter(
+                    param_type="integer",
                     description="Optional parameter",
                     required=False,
                     enum=["1", "2", "3"]  # Enum values must be strings
                 )
             }
         ),
-        Tool(
+        base_tool(
             name="another_tool",
             description="Another test tool",
             parameters={
-                "param3": ToolParameter(
-                    type="boolean",
+                "param3": base_tool_parameter(
+                    param_type="boolean",
                     description="Boolean parameter",
                     required=True,
                     default=False
@@ -74,7 +74,7 @@ def test_initialization_success(config, executor):
 
 def test_initialization_no_model(executor):
     """Test initialization with no model specified."""
-    config = ProviderConfig(api_key="test-key")
+    config = ProviderConfig.from_settings("anthropic", ProviderSettings(anthropic_api_key="test-key"))
     provider = AnthropicProvider(config, executor)
     assert provider.config.model == "claude-3-sonnet-20240229"
 

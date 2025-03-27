@@ -23,8 +23,6 @@ class OpenAIProvider(Provider):
         """
         self.config = config
         self.executor = executor
-        if not config.model:
-            config.model = "gpt-4-turbo"
             
         try:
             self._client = AsyncOpenAI(api_key=config.api_key)

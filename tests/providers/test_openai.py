@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import Mock, patch, AsyncMock
 import json
 
-from agentical.core import ProviderConfig, ToolExecutor, Tool, ToolParameter, ProviderError
+from agentical.core import ProviderConfig, ToolExecutor, Tool, ToolParameter, ProviderError, ProviderSettings
 from agentical.providers.openai import OpenAIProvider
 
 
@@ -30,23 +30,23 @@ def provider(config, executor):
 
 
 @pytest.fixture
-def sample_tools():
+def sample_tools(base_tool, base_tool_parameter):
     """Fixture for sample tools."""
     return [
-        Tool(
+        base_tool(
             name="test_tool",
             description="A test tool",
             parameters={
-                "param1": ToolParameter(
-                    type="string",
+                "param1": base_tool_parameter(
+                    param_type="string",
                     description="Test parameter",
                     required=True
                 ),
-                "param2": ToolParameter(
-                    type="integer",
+                "param2": base_tool_parameter(
+                    param_type="integer",
                     description="Optional parameter",
                     required=False,
-                    enum=["1", "2", "3"]  # Enum values must be strings according to ToolParameter definition
+                    enum=["1", "2", "3"]  # Enum values must be strings
                 )
             }
         )
@@ -62,9 +62,9 @@ def test_initialization_success(config, executor):
 
 def test_initialization_no_model(executor):
     """Test initialization with no model specified."""
-    config = ProviderConfig(api_key="test-key")
+    config = ProviderConfig.from_settings("openai", ProviderSettings(openai_api_key="test-key"))
     provider = OpenAIProvider(config, executor)
-    assert provider.config.model == "gpt-4-turbo"
+    assert provider.config.model == "gpt-4-turbo-preview"
 
 
 @patch('agentical.providers.openai.AsyncOpenAI')
