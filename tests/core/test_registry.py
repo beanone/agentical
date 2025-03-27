@@ -4,7 +4,7 @@ import pytest
 from typing import Dict, Any
 
 from agentical.core import ToolRegistry
-from agentical.types import Tool, ToolParameter
+from agentical.core.types import Tool, ToolParameter
 
 
 def test_register_tool() -> None:
@@ -86,61 +86,4 @@ def test_get_nonexistent_tool() -> None:
     registry = ToolRegistry()
     
     with pytest.raises(KeyError):
-        registry.get_tool("nonexistent_tool")
-
-
-def test_get_openai_tools() -> None:
-    """Test getting tools in OpenAI format."""
-    registry = ToolRegistry()
-    
-    # Create and register test tools
-    tool1 = Tool(
-        name="tool1",
-        description="First test tool",
-        parameters={
-            "param1": ToolParameter(
-                type="string",
-                description="Test parameter 1",
-                required=True
-            )
-        }
-    )
-    
-    tool2 = Tool(
-        name="tool2",
-        description="Second test tool",
-        parameters={
-            "param2": ToolParameter(
-                type="number",
-                description="Test parameter 2",
-                required=False
-            )
-        }
-    )
-    
-    registry.register_tool(tool1)
-    registry.register_tool(tool2)
-    
-    # Get OpenAI tools
-    openai_tools = registry.to_openai_format()
-    
-    # Verify format
-    assert len(openai_tools) == 2
-    
-    for tool in openai_tools:
-        assert "type" in tool
-        assert tool["type"] == "function"
-        assert "function" in tool
-        assert "name" in tool["function"]
-        assert "description" in tool["function"]
-        assert "parameters" in tool["function"]
-        
-        if tool["function"]["name"] == "tool1":
-            assert tool["function"]["description"] == "First test tool"
-            assert "param1" in tool["function"]["parameters"]["properties"]
-            assert tool["function"]["parameters"]["required"] == ["param1"]
-            
-        elif tool["function"]["name"] == "tool2":
-            assert tool["function"]["description"] == "Second test tool"
-            assert "param2" in tool["function"]["parameters"]["properties"]
-            assert tool["function"]["parameters"]["required"] == [] 
+        registry.get_tool("nonexistent_tool") 

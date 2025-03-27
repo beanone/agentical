@@ -33,7 +33,7 @@ from typing import Dict, Any, Optional, Final, List
 from datetime import datetime
 
 # Import from my_assistant.mcp.tools.py module
-from agentical.types import Tool, ToolParameter
+from agentical.core.types import Tool, ToolParameter
 
 
 # Constants

@@ -1,11 +1,35 @@
-"""Core functionality for the Agentic framework."""
+"""Core module for Agentical framework."""
 
-from .registry import ToolRegistry
 from .executor import ToolExecutor
-from .integration import LLMToolIntegration
+from .provider import Provider
+from .provider_registry import ProviderRegistry
+from .provider_config import ProviderConfig, ProviderSettings, ProviderError
+from .registry import ToolRegistry
+from .errors import ProviderError, ToolError, ConfigError, APIError
+from .types import (
+    Tool,
+    ToolParameter,
+    ToolResult,
+    ToolHandler,
+    ToolCall,
+    Message
+)
 
 __all__ = [
+    "Tool",
+    "ToolParameter",
+    "ToolResult",
+    "ToolHandler",
+    "ToolCall",
+    "Message",
     "ToolRegistry",
-    "ToolExecutor", 
-    "LLMToolIntegration"
+    "ToolExecutor",
+    "Provider",
+    "ProviderRegistry",
+    "ProviderConfig",
+    "ProviderSettings",
+    "ProviderError",
+    "ToolError",
+    "ConfigError",
+    "APIError"
 ]

@@ -2,36 +2,37 @@
 
 import pytest
 from typing import Dict, Any, List
+import asyncio
 
 from agentical.core import ToolRegistry, ToolExecutor
 from agentical.core.executor import ToolExecutionError
-from agentical.types import Tool, ToolParameter, ToolCall
+from agentical.core.types import Tool, ToolParameter, ToolCall
 
 
 @pytest.fixture
-def registry() -> ToolRegistry:
+def registry(base_tool, base_tool_parameter) -> ToolRegistry:
     """Create a test registry with tools."""
     registry = ToolRegistry()
     
     # Create test tools
-    tool1 = Tool(
+    tool1 = base_tool(
         name="tool1",
         description="First test tool",
         parameters={
-            "param1": ToolParameter(
-                type="string",
+            "param1": base_tool_parameter(
+                param_type="string",
                 description="Test parameter 1",
                 required=True
             )
         }
     )
     
-    tool2 = Tool(
+    tool2 = base_tool(
         name="tool2",
         description="Second test tool",
         parameters={
-            "param2": ToolParameter(
-                type="number",
+            "param2": base_tool_parameter(
+                param_type="number",
                 description="Test parameter 2",
                 required=False
             )

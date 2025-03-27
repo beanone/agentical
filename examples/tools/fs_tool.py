@@ -8,7 +8,7 @@ import shutil
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
-from agentical.types import Tool, ToolParameter
+from agentical.core.types import Tool, ToolParameter
 
 
 class FSError(Exception):

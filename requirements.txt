@@ -2,6 +2,8 @@ aiohttp
 pydantic
 openai
 anthropic
+pydantic-settings
+python-dotenv
 
 pytest
 pytest-cov
