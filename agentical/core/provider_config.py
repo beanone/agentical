@@ -5,7 +5,7 @@ with support for reading from environment variables.
 """
 
 from typing import Optional, Dict, Any, Literal
-from pydantic import Field
+from pydantic import Field, ConfigDict
 from pydantic_settings import BaseSettings
 from dataclasses import dataclass, field
 
@@ -48,9 +48,11 @@ class ProviderSettings(BaseSettings):
     def __init__(self, env_file: Optional[str] = ".env", **kwargs):
         super().__init__(env_file=env_file, **kwargs)
     
-    class Config:
-        case_sensitive = False
-        extra = "allow"  # Allow extra fields for future extensibility
+    # Configuration using ConfigDict
+    model_config = ConfigDict(
+        case_sensitive=False,
+        extra="allow"  # Allow extra fields for future extensibility
+    )
 
 
 

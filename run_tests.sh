@@ -7,4 +7,4 @@ fi
 
 # Run tests
 echo "Running tests..."
-python3 -m pytest tests/core tests/examples -v
+python3 -m pytest tests/core tests/examples tests/providers -v
