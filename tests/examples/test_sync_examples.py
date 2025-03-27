@@ -1,12 +1,11 @@
 """Tests for example scripts."""
 
 import os
-import asyncio
 import pytest
 from typing import Dict, Any, List
 from unittest.mock import AsyncMock, patch, MagicMock
 
-from examples.tools.examples import (
+from examples.tools.sync_examples import (
     run_weather_example,
     run_calculator_example,
     run_filesystem_example,
@@ -22,29 +21,18 @@ from examples.tools.weather_tool import create_weather_tool
 from agentical.core import ToolRegistry
 
 
-def mock_asyncio_run(coro):
-    """Helper function to mock asyncio.run()."""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
-        asyncio.set_event_loop(None)
-
-
-def test_run_weather_example() -> None:
+@pytest.mark.asyncio
+async def test_run_weather_example() -> None:
     """Test running the weather example."""
     # Mock the executor
     mock_executor = AsyncMock()
     mock_executor.execute_tool = AsyncMock(return_value="Sunny, 25°C")
     
-    # Mock input collection and asyncio.run
+    # Mock input collection
     with patch("builtins.input", side_effect=["London", "metric"]), \
-         patch("examples.tools.weather_tool.collect_input", new_callable=AsyncMock) as mock_collect, \
-         patch("asyncio.run", side_effect=mock_asyncio_run):
+         patch("examples.tools.weather_tool.collect_input", new_callable=AsyncMock) as mock_collect:
         mock_collect.return_value = {"location": "London", "units": "metric"}
-        run_weather_example(mock_executor)
+        await run_weather_example(mock_executor)
         
     # Verify tool was called
     mock_executor.execute_tool.assert_called_once_with(
@@ -52,18 +40,18 @@ def test_run_weather_example() -> None:
     )
 
 
-def test_run_calculator_example() -> None:
+@pytest.mark.asyncio
+async def test_run_calculator_example() -> None:
     """Test running the calculator example."""
     # Mock the executor
     mock_executor = AsyncMock()
     mock_executor.execute_tool = AsyncMock(return_value="4")
     
-    # Mock input collection and asyncio.run
+    # Mock input collection
     with patch("builtins.input", return_value="2 + 2"), \
-         patch("examples.tools.calculator_tool.collect_input", new_callable=AsyncMock) as mock_collect, \
-         patch("asyncio.run", side_effect=mock_asyncio_run):
+         patch("examples.tools.calculator_tool.collect_input", new_callable=AsyncMock) as mock_collect:
         mock_collect.return_value = {"expression": "2 + 2"}
-        run_calculator_example(mock_executor)
+        await run_calculator_example(mock_executor)
         
     # Verify tool was called
     mock_executor.execute_tool.assert_called_once_with(
@@ -71,16 +59,16 @@ def test_run_calculator_example() -> None:
     )
 
 
-def test_run_filesystem_example():
+@pytest.mark.asyncio
+async def test_run_filesystem_example():
     """Test running filesystem example."""
     # Mock the executor
     mock_executor = AsyncMock()
     mock_executor.execute_tool = AsyncMock(return_value="File contents")
     
-    # Mock collect_input and asyncio.run
+    # Mock collect_input to return read operation
     with patch("builtins.input", side_effect=["read", "test.txt"]), \
-         patch("examples.tools.examples.collect_filesystem_input", new_callable=AsyncMock) as mock_input, \
-         patch("asyncio.run", side_effect=mock_asyncio_run):
+         patch("examples.tools.sync_examples.collect_filesystem_input", new_callable=AsyncMock) as mock_input:
         mock_input.return_value = {
             "operation": "read",
             "path": "test.txt",
@@ -88,7 +76,7 @@ def test_run_filesystem_example():
         }
         
         # Run example
-        run_filesystem_example(mock_executor)
+        await run_filesystem_example(mock_executor)
         
         # Verify input was collected
         assert mock_input.call_count == 1
@@ -104,124 +92,125 @@ def test_run_filesystem_example():
         )
 
 
-def test_run_llm_chat() -> None:
+@pytest.mark.asyncio
+async def test_run_llm_chat() -> None:
     """Test running the OpenAI chat example."""
     # Mock the integration
     mock_integration = AsyncMock()
     mock_integration.run_conversation = AsyncMock(return_value="Test response")
     
-    # Mock environment, input, and asyncio.run
+    # Mock environment and input
     with patch.dict("os.environ", {"OPENAI_API_KEY": "test_key"}), \
-         patch("builtins.input", side_effect=["Hello", "exit"]), \
-         patch("asyncio.run", side_effect=mock_asyncio_run):
-        run_llm_chat(mock_integration)
+         patch("builtins.input", side_effect=["Hello", "exit"]):
+        await run_llm_chat(mock_integration)
         
     # Verify conversation was run
     assert mock_integration.run_conversation.call_count == 1
 
 
-def test_run_claude_chat() -> None:
+@pytest.mark.asyncio
+async def test_run_claude_chat() -> None:
     """Test running the Claude chat example."""
     # Mock the integration
     mock_integration = AsyncMock()
     mock_integration.run_conversation = AsyncMock(return_value="Test response")
     
-    # Mock environment, input, and asyncio.run
+    # Mock environment and input
     with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test_key"}), \
-         patch("builtins.input", side_effect=["Hello", "exit"]), \
-         patch("asyncio.run", side_effect=mock_asyncio_run):
-        run_claude_chat(mock_integration)
+         patch("builtins.input", side_effect=["Hello", "exit"]):
+        await run_claude_chat(mock_integration)
         
     # Verify conversation was run
     assert mock_integration.run_conversation.call_count == 1
 
 
-def test_main_weather() -> None:
+@pytest.mark.asyncio
+async def test_main_weather() -> None:
     """Test main function with weather mode."""
     mock_executor = AsyncMock()
     mock_executor.execute_tool = AsyncMock(return_value="Sunny, 25°C")
     
-    with patch("examples.tools.examples._setup_tools", return_value=(MagicMock(), "test_key")), \
-         patch("examples.tools.examples._setup_executor", return_value=mock_executor), \
+    with patch("examples.tools.sync_examples._setup_tools", return_value=(MagicMock(), "test_key")), \
+         patch("examples.tools.sync_examples._setup_executor", return_value=mock_executor), \
          patch("builtins.input", side_effect=["1", "London", "metric"]), \
-         patch("examples.tools.weather_tool.collect_input", new_callable=AsyncMock) as mock_collect, \
-         patch("asyncio.run", side_effect=mock_asyncio_run):
+         patch("examples.tools.weather_tool.collect_input", new_callable=AsyncMock) as mock_collect:
         mock_collect.return_value = {"location": "London", "units": "metric"}
-        main()
+        await main()
         
     mock_executor.execute_tool.assert_called_once()
 
 
-def test_main_calculator() -> None:
+@pytest.mark.asyncio
+async def test_main_calculator() -> None:
     """Test main function with calculator mode."""
     mock_executor = AsyncMock()
     mock_executor.execute_tool = AsyncMock(return_value="4")
     
-    with patch("examples.tools.examples._setup_tools", return_value=(MagicMock(), None)), \
-         patch("examples.tools.examples._setup_executor", return_value=mock_executor), \
+    with patch("examples.tools.sync_examples._setup_tools", return_value=(MagicMock(), None)), \
+         patch("examples.tools.sync_examples._setup_executor", return_value=mock_executor), \
          patch("builtins.input", side_effect=["2", "2 + 2"]), \
-         patch("examples.tools.calculator_tool.collect_input", new_callable=AsyncMock) as mock_collect, \
-         patch("asyncio.run", side_effect=mock_asyncio_run):
+         patch("examples.tools.calculator_tool.collect_input", new_callable=AsyncMock) as mock_collect:
         mock_collect.return_value = {"expression": "2 + 2"}
-        main()
+        await main()
         
     mock_executor.execute_tool.assert_called_once()
 
 
-def test_main_filesystem() -> None:
+@pytest.mark.asyncio
+async def test_main_filesystem() -> None:
     """Test main function with filesystem mode."""
     mock_executor = AsyncMock()
     mock_executor.execute_tool = AsyncMock(return_value="File contents: test")
     
-    with patch("examples.tools.examples._setup_tools", return_value=(MagicMock(), None)), \
-         patch("examples.tools.examples._setup_executor", return_value=mock_executor), \
+    with patch("examples.tools.sync_examples._setup_tools", return_value=(MagicMock(), None)), \
+         patch("examples.tools.sync_examples._setup_executor", return_value=mock_executor), \
          patch("builtins.input", side_effect=["3", "read", "test.txt"]), \
-         patch("examples.tools.fs_tool.collect_input", new_callable=AsyncMock) as mock_collect, \
-         patch("asyncio.run", side_effect=mock_asyncio_run):
+         patch("examples.tools.fs_tool.collect_input", new_callable=AsyncMock) as mock_collect:
         mock_collect.return_value = {"operation": "read", "path": "test.txt"}
-        main()
+        await main()
         
     mock_executor.execute_tool.assert_called_once()
 
 
-def test_main_openai_chat() -> None:
+@pytest.mark.asyncio
+async def test_main_openai_chat() -> None:
     """Test main function with OpenAI chat mode."""
     mock_integration = AsyncMock()
     mock_integration.run_conversation = AsyncMock(return_value="Test response")
     
-    with patch("examples.tools.examples._setup_tools", return_value=(MagicMock(), None)), \
-         patch("examples.tools.examples._setup_executor", return_value=AsyncMock()), \
-         patch("examples.tools.examples.LLMToolIntegration", return_value=mock_integration), \
+    with patch("examples.tools.sync_examples._setup_tools", return_value=(MagicMock(), None)), \
+         patch("examples.tools.sync_examples._setup_executor", return_value=AsyncMock()), \
+         patch("examples.tools.sync_examples.LLMToolIntegration", return_value=mock_integration), \
          patch.dict("os.environ", {"OPENAI_API_KEY": "test_key"}), \
-         patch("builtins.input", side_effect=["4", "Hello", "exit"]), \
-         patch("asyncio.run", side_effect=mock_asyncio_run):
-        main()
+         patch("builtins.input", side_effect=["4", "Hello", "exit"]):
+        await main()
         
     mock_integration.run_conversation.assert_called_once()
 
 
-def test_main_claude_chat() -> None:
+@pytest.mark.asyncio
+async def test_main_claude_chat() -> None:
     """Test main function with Claude chat mode."""
     mock_integration = AsyncMock()
     mock_integration.run_conversation = AsyncMock(return_value="Test response")
     
-    with patch("examples.tools.examples._setup_tools", return_value=(MagicMock(), None)), \
-         patch("examples.tools.examples._setup_executor", return_value=AsyncMock()), \
-         patch("examples.tools.examples.LLMToolIntegration", return_value=mock_integration), \
+    with patch("examples.tools.sync_examples._setup_tools", return_value=(MagicMock(), None)), \
+         patch("examples.tools.sync_examples._setup_executor", return_value=AsyncMock()), \
+         patch("examples.tools.sync_examples.LLMToolIntegration", return_value=mock_integration), \
          patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test_key"}), \
-         patch("builtins.input", side_effect=["5", "Hello", "exit"]), \
-         patch("asyncio.run", side_effect=mock_asyncio_run):
-        main()
+         patch("builtins.input", side_effect=["5", "Hello", "exit"]):
+        await main()
         
     mock_integration.run_conversation.assert_called_once()
 
 
-def test_main_invalid_mode() -> None:
+@pytest.mark.asyncio
+async def test_main_invalid_mode() -> None:
     """Test main function with invalid mode."""
-    with patch("examples.tools.examples._setup_tools", return_value=(MagicMock(), None)), \
-         patch("examples.tools.examples._setup_executor", return_value=AsyncMock()), \
+    with patch("examples.tools.sync_examples._setup_tools", return_value=(MagicMock(), None)), \
+         patch("examples.tools.sync_examples._setup_executor", return_value=AsyncMock()), \
          patch("builtins.input", return_value="invalid"):
-        main()
+        await main()
 
 
 def test_setup_tools() -> None:
