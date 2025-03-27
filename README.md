@@ -138,51 +138,98 @@ This example demonstrates:
 
 ## Architecture
 
-Agentical is built around these core components:
+```mermaid
+graph TB
+    subgraph Client
+        App[Application]
+    end
 
-- **Providers**: Interface with LLM services (OpenAI, Anthropic, etc.)
-- **Tools**: Executable functions that agents can use
-- **Registry**: Manages available tools and their metadata
-- **Executor**: Handles tool execution and response processing
+    subgraph Agentical[Agentical Framework]
+        LLMInt[LLMToolIntegration]
+        TR[ToolRegistry]
+        TE[ToolExecutor]
+        PC[ProviderConfig]
+        
+        subgraph Providers[LLM Providers]
+            OpenAI[OpenAI Provider]
+            Claude[Anthropic Provider]
+            Other[Other Providers...]
+        end
+        
+        subgraph Tools[Tool System]
+            Tool1[Tool 1]
+            Tool2[Tool 2]
+            Handler1[Handler 1]
+            Handler2[Handler 2]
+        end
+    end
 
-### Provider System
+    App --> LLMInt
+    LLMInt --> TR
+    LLMInt --> TE
+    LLMInt --> PC
+    
+    PC --> OpenAI
+    PC --> Claude
+    PC --> Other
+    
+    TR --> Tool1
+    TR --> Tool2
+    TE --> Handler1
+    TE --> Handler2
+    
+    Tool1 -.-> Handler1
+    Tool2 -.-> Handler2
 
-The provider system is designed to be extensible and configurable:
-
-```python
-from agentical.core import ProviderSettings, ProviderConfig
-
-# Global settings for all providers
-settings = ProviderSettings(
-    openai_model="gpt-4-turbo-preview",
-    anthropic_model="claude-3-sonnet-20240229"
-)
-
-# Provider-specific configuration
-config = ProviderConfig.from_settings("openai", settings)
+    classDef default fill:#f9f9f9,stroke:#333,stroke-width:2px;
+    classDef framework fill:#e1f3d8,stroke:#82b366,stroke-width:2px;
+    classDef provider fill:#dae8fc,stroke:#6c8ebf,stroke-width:2px;
+    classDef tool fill:#ffe6cc,stroke:#d79b00,stroke-width:2px;
+    
+    class App default
+    class LLMInt,TR,TE,PC framework
+    class OpenAI,Claude,Other provider
+    class Tool1,Tool2,Handler1,Handler2 tool
 ```
 
-### Tool System
+### Key Components
 
-Tools are defined using a simple decorator pattern:
+- **LLMToolIntegration**: Central component that orchestrates the interaction between LLMs and tools
+- **ProviderConfig**: Manages configuration for different LLM providers (API keys, models, etc.)
+- **ToolRegistry**: Maintains the collection of available tools and their specifications
+- **ToolExecutor**: Handles the execution of tools through their respective handlers
+- **Tools**: Individual capabilities that can be invoked by the LLM
+- **Tool Handlers**: Implementation of tool logic and execution
 
-```python
-from agentical import tool
+### Data Flow
 
-@tool(
-    name="calculator",
-    description="Performs basic arithmetic operations",
-    parameters={
-        "operation": "The operation to perform (add, subtract, multiply, divide)",
-        "numbers": "List of numbers to operate on"
-    }
-)
-def calculator(operation: str, numbers: list[float]) -> float:
-    """A simple calculator tool that performs basic arithmetic."""
-    if operation == "add":
-        return sum(numbers)
-    # ... other operations
+```mermaid
+sequenceDiagram
+    participant User
+    participant LLM as LLMToolIntegration
+    participant Provider as LLM Provider
+    participant Tools as Tool System
+
+    User->>LLM: Send message
+    LLM->>Provider: Forward message + tool specs
+    Provider-->>LLM: Request tool execution
+    LLM->>Tools: Execute tool
+    Note right of Tools: Tool execution<br/>and validation
+    Tools-->>LLM: Tool result
+    LLM->>Provider: Send result
+    Provider-->>LLM: Final response
+    LLM-->>User: Display response
 ```
+
+### Key Interactions
+
+1. User sends a message to the LLMToolIntegration
+2. Message is forwarded to the LLM provider along with available tool specifications
+3. LLM decides to use a tool and requests execution
+4. Tool request is validated against the registry
+5. Tool is executed through its handler
+6. Results are sent back to the LLM for final response generation
+7. Final response is displayed to the user
 
 ## Development
 
