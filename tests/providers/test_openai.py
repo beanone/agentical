@@ -9,9 +9,10 @@ from agentical.providers.openai import OpenAIProvider
 
 
 @pytest.fixture
-def config():
+def config(base_provider_config):
     """Fixture for provider config."""
-    return ProviderConfig(
+    return base_provider_config(
+        provider_type="openai",
         api_key="test-key",
         model="gpt-4-turbo"
     )
@@ -60,9 +61,12 @@ def test_initialization_success(config, executor):
     assert provider.executor == executor
 
 
-def test_initialization_no_model(executor):
+def test_initialization_no_model(executor, base_provider_config):
     """Test initialization with no model specified."""
-    config = ProviderConfig.from_settings("openai", ProviderSettings(openai_api_key="test-key"))
+    config = base_provider_config(
+        provider_type="openai",
+        api_key="test-key"
+    )
     provider = OpenAIProvider(config, executor)
     assert provider.config.model == "gpt-4-turbo-preview"
 

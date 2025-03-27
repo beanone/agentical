@@ -9,9 +9,10 @@ from agentical.providers.anthropic import AnthropicProvider
 
 
 @pytest.fixture
-def config():
+def config(base_provider_config):
     """Fixture for provider config."""
-    return ProviderConfig(
+    return base_provider_config(
+        provider_type="anthropic",
         api_key="test-key",
         model="claude-3-sonnet-20240229"
     )
@@ -72,9 +73,12 @@ def test_initialization_success(config, executor):
     assert provider.executor == executor
 
 
-def test_initialization_no_model(executor):
+def test_initialization_no_model(executor, base_provider_config):
     """Test initialization with no model specified."""
-    config = ProviderConfig.from_settings("anthropic", ProviderSettings(anthropic_api_key="test-key"))
+    config = base_provider_config(
+        provider_type="anthropic",
+        api_key="test-key"
+    )
     provider = AnthropicProvider(config, executor)
     assert provider.config.model == "claude-3-sonnet-20240229"
 
