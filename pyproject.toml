@@ -29,8 +29,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-openai = [
+llm = [
     "openai>=1.0.0",
+    "anthropic>=0.18.0",
 ]
 dev = [
     "pytest>=7.0.0",
@@ -44,6 +45,7 @@ dev = [
 examples = [
     "aiohttp>=3.8.0",
     "openai>=1.0.0",
+    "anthropic>=0.18.0",
 ]
 
 [tool.hatch.build.targets.wheel]

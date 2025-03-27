@@ -11,10 +11,10 @@ The tools can be used either:
 
 Example:
     ```python
-    async def main():
+    def main():
         registry, api_key = _setup_tools()
         executor = _setup_executor(registry, api_key)
-        await run_calculator_example(executor)
+        run_calculator_example(executor)
     ```
 
 Note:
@@ -76,7 +76,7 @@ from .fs_tool import (
 )
 
 
-async def run_weather_example(executor: ToolExecutor) -> None:
+def run_weather_example(executor: ToolExecutor) -> None:
     """Run an interactive weather information example.
     
     This function prompts the user for location and unit preferences,
@@ -90,8 +90,8 @@ async def run_weather_example(executor: ToolExecutor) -> None:
         Exception: For other unexpected errors
     """
     try:
-        params = await collect_weather_input()
-        result = await executor.execute_tool("get_weather", params)
+        params = asyncio.run(collect_weather_input())
+        result = asyncio.run(executor.execute_tool("get_weather", params))
         print("\nWeather information:")
         print(result)
     except WeatherError as e:
@@ -100,7 +100,7 @@ async def run_weather_example(executor: ToolExecutor) -> None:
         print(f"Unexpected error: {str(e)}")
 
 
-async def run_calculator_example(executor: ToolExecutor) -> None:
+def run_calculator_example(executor: ToolExecutor) -> None:
     """Run an interactive calculator example.
     
     This function prompts the user for a mathematical expression,
@@ -114,8 +114,8 @@ async def run_calculator_example(executor: ToolExecutor) -> None:
         Exception: For other unexpected errors
     """
     try:
-        params = await collect_calculator_input()
-        result = await executor.execute_tool("calculator", params)
+        params = asyncio.run(collect_calculator_input())
+        result = asyncio.run(executor.execute_tool("calculator", params))
         print("\nCalculation result:")
         print(result)
     except CalculatorError as e:
@@ -124,7 +124,7 @@ async def run_calculator_example(executor: ToolExecutor) -> None:
         print(f"Unexpected error: {str(e)}")
 
 
-async def run_filesystem_example(executor: ToolExecutor) -> None:
+def run_filesystem_example(executor: ToolExecutor) -> None:
     """Run an interactive filesystem operation example.
     
     This function prompts the user for filesystem operation details
@@ -138,8 +138,8 @@ async def run_filesystem_example(executor: ToolExecutor) -> None:
         Exception: For other unexpected errors
     """
     try:
-        params = await collect_filesystem_input()
-        result = await executor.execute_tool("filesystem", params)
+        params = asyncio.run(collect_filesystem_input())
+        result = asyncio.run(executor.execute_tool("filesystem", params))
         print("\nFilesystem operation result:")
         print(result)
     except FSError as e:
@@ -148,7 +148,7 @@ async def run_filesystem_example(executor: ToolExecutor) -> None:
         print(f"Unexpected error: {str(e)}")
 
 
-async def _initialize_chat() -> List[Dict[str, str]]:
+def _initialize_chat() -> List[Dict[str, str]]:
     """Initialize chat with system message.
     
     Creates the initial message list with a system message that defines
@@ -163,7 +163,7 @@ async def _initialize_chat() -> List[Dict[str, str]]:
     }]
 
 
-async def run_chat(
+def run_chat(
     integration: Optional[LLMToolIntegration] = None,
     *,
     model_provider: ModelProvider = "openai"
@@ -219,7 +219,7 @@ async def run_chat(
             return
         
     print(f"\nStarting chat with {config['display_name']} (type 'exit' to quit):")
-    messages = await _initialize_chat()
+    messages = _initialize_chat()
     
     try:
         while True:
@@ -232,7 +232,7 @@ async def run_chat(
                 messages.append({"role": "user", "content": user_input})
                 
                 print("Assistant is thinking...")
-                response = await integration.run_conversation(messages)
+                response = asyncio.run(integration.run_conversation(messages))
                 
                 print(f"Assistant: {response}")
                 messages.append({"role": "assistant", "content": response})
@@ -247,22 +247,22 @@ async def run_chat(
         print(f"Fatal error in chat: {str(e)}")
 
 
-async def run_llm_chat(integration: Optional[LLMToolIntegration] = None) -> None:
+def run_llm_chat(integration: Optional[LLMToolIntegration] = None) -> None:
     """Run a chat with OpenAI's GPT using all tools.
     
     Args:
         integration: Optional pre-configured LLM tool integration
     """
-    await run_chat(integration, model_provider="openai")
+    run_chat(integration, model_provider="openai")
 
 
-async def run_claude_chat(integration: Optional[LLMToolIntegration] = None) -> None:
+def run_claude_chat(integration: Optional[LLMToolIntegration] = None) -> None:
     """Run a chat with Anthropic's Claude using all tools.
     
     Args:
         integration: Optional pre-configured LLM tool integration
     """
-    await run_chat(integration, model_provider="anthropic")
+    run_chat(integration, model_provider="anthropic")
 
 
 def _setup_tools() -> tuple[ToolRegistry, Optional[str]]:
@@ -337,7 +337,7 @@ def _setup_executor(registry: ToolRegistry, api_key: Optional[str]) -> ToolExecu
     return executor
 
 
-async def main() -> None:
+def main() -> None:
     """Run the interactive example application.
     
     This function:
@@ -367,20 +367,20 @@ async def main() -> None:
     mode = input("\nChoose mode (1-5): ")
     
     if mode == "1" and api_key:
-        await run_weather_example(executor)
+        run_weather_example(executor)
     elif mode == "1" and not api_key:
         print("Weather tool is not available without an API key.")
     elif mode == "2":
-        await run_calculator_example(executor)
+        run_calculator_example(executor)
     elif mode == "3":
-        await run_filesystem_example(executor)
+        run_filesystem_example(executor)
     elif mode == "4":
-        await run_llm_chat()
+        run_llm_chat()
     elif mode == "5":
-        await run_claude_chat()
+        run_claude_chat()
     else:
         print(f"Invalid mode: {mode}")
 
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    main() 
