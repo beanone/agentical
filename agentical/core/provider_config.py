@@ -9,6 +9,8 @@ from pydantic import Field, ConfigDict
 from pydantic_settings import BaseSettings
 from dataclasses import dataclass, field
 
+from .errors import ConfigError
+
 
 class ProviderError(Exception):
     """Raised when there is an error with provider configuration."""
@@ -88,7 +90,7 @@ class ProviderConfig:
             A configured ProviderConfig instance
             
         Raises:
-            ValueError: If provider is not supported
+            ConfigError: If provider is not supported
         """
         if settings is None:
             settings = ProviderSettings()
@@ -115,7 +117,7 @@ class ProviderConfig:
         }
         
         if provider not in provider_configs:
-            raise ProviderError(f"Unsupported provider: {provider}")
+            raise ConfigError(f"Unsupported provider: {provider}", provider_name=provider)
             
         return provider_configs[provider]()
             

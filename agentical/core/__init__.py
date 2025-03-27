@@ -5,6 +5,7 @@ from .provider import Provider
 from .provider_registry import ProviderRegistry
 from .provider_config import ProviderConfig, ProviderSettings, ProviderError
 from .registry import ToolRegistry
+from .errors import ProviderError, ToolError, ConfigError, APIError
 from .types import (
     Tool,
     ToolParameter,
@@ -27,5 +28,8 @@ __all__ = [
     "ProviderRegistry",
     "ProviderConfig",
     "ProviderSettings",
-    "ProviderError"
+    "ProviderError",
+    "ToolError",
+    "ConfigError",
+    "APIError"
 ]

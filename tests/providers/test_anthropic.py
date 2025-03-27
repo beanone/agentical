@@ -234,22 +234,23 @@ async def test_run_conversation_tool_error(provider, sample_tools, sample_tool_c
     
     # Response with tool use
     mock_response = Mock()
+    mock_tool_use = Mock(spec=['type', 'id', 'name', 'input'])
+    mock_tool_use.type = 'tool_use'
+    mock_tool_use.id = sample_tool_calls["test_tool"]["id"]
+    mock_tool_use.name = "test_tool"
+    mock_tool_use.input = sample_tool_calls["test_tool"]["parameters"]
+    
     mock_response.content = [
         Mock(type='text', text="Let me try that"),
-        Mock(
-            type='tool_use',
-            id=sample_tool_calls["test_tool"]["id"],
-            name=sample_tool_calls["test_tool"]["name"],
-            input=sample_tool_calls["test_tool"]["parameters"]
-        )
+        mock_tool_use
     ]
     
     # Configure executor with error handler
-    error_handler = Mock(side_effect=Exception(sample_tool_results["test_tool"]["error"]))
+    error_handler = AsyncMock(side_effect=Exception(sample_tool_results["test_tool"]["error"]))
     provider.executor.register_handler("test_tool", error_handler)
     
     with patch.object(provider._client.messages, 'create',
                      AsyncMock(return_value=mock_response)):
         with pytest.raises(ProviderError) as exc:
             await provider.run_conversation(messages, sample_tools)
-        assert "Error in Anthropic conversation" in str(exc.value) 
+        assert sample_tool_results["test_tool"]["error"] in str(exc.value) 

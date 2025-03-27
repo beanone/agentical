@@ -4,7 +4,8 @@ from typing import List, Dict, Any
 from anthropic import AsyncAnthropic
 
 from agentical.core import Tool
-from agentical.core import Provider, ProviderConfig, ProviderError
+from agentical.core import Provider, ProviderConfig
+from agentical.core import ProviderError, APIError, ToolError
 from agentical.core import ToolExecutor
 import traceback
 
@@ -30,7 +31,10 @@ class AnthropicProvider(Provider):
         try:
             self._client = AsyncAnthropic(api_key=config.api_key)
         except Exception as e:
-            raise ProviderError(f"Failed to initialize Anthropic client: {str(e)}")
+            raise ProviderError(
+                f"Failed to initialize Anthropic client: {str(e)}",
+                provider_name=self.get_name()
+            )
     
     def get_name(self) -> str:
         """Get the name of the provider."""
@@ -89,10 +93,16 @@ class AnthropicProvider(Provider):
                 if block.type == 'text':
                     result_text.append(block.text)
                 elif block.type == 'tool_use':
-                    # Execute the tool
-                    tool_output = await self.executor.execute_tool(
-                        block.name, block.input
-                    )
+                    try:
+                        # Execute the tool
+                        tool_output = await self.executor.execute_tool(
+                            block.name, block.input
+                        )
+                    except Exception as e:
+                        raise ToolError(
+                            str(e),
+                            provider_name=self.get_name()
+                        )
                     
                     # Add the tool call and output to the messages
                     anthropic_messages.append({
@@ -112,9 +122,13 @@ class AnthropicProvider(Provider):
             
             return " ".join(result_text)
             
+        except ToolError:
+            raise
         except Exception as e:
-            traceback.print_exc()
-            raise ProviderError(f"Error in Anthropic conversation: {str(e)}")
+            raise APIError(
+                f"Error in Anthropic conversation: {str(e)}",
+                provider_name=self.get_name()
+            )
     
     def _format_tools(self, tools: List[Tool]) -> List[Dict[str, Any]]:
         """Format tools for Anthropic's function calling format."""
