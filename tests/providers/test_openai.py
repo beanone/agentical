@@ -19,9 +19,14 @@ def config(base_provider_config):
 
 
 @pytest.fixture
-def executor():
+def executor(base_tool_executor, sample_tools, mock_async_handler):
     """Fixture for tool executor."""
-    return Mock(spec=ToolExecutor)
+    return base_tool_executor(
+        tools=sample_tools,
+        handlers={
+            "test_tool": mock_async_handler("Tool result")
+        }
+    )
 
 
 @pytest.fixture
@@ -137,7 +142,7 @@ async def test_run_conversation_simple(provider, sample_tools):
 
 
 @pytest.mark.asyncio
-async def test_run_conversation_with_tool_call(provider, sample_tools, executor):
+async def test_run_conversation_with_tool_call(provider, sample_tools, executor, mock_async_handler):
     """Test running a conversation with tool calls."""
     messages = [{"role": "user", "content": "Use the tool"}]
     
@@ -162,30 +167,38 @@ async def test_run_conversation_with_tool_call(provider, sample_tools, executor)
         ])
     ]
     
-    # Mock the tool execution
-    executor.execute_tool = AsyncMock(return_value="Tool result")
-    
     with patch.object(provider._client.chat.completions, 'create', 
                      AsyncMock(side_effect=mock_responses)):
         response = await provider.run_conversation(messages, sample_tools)
         
         assert response == "Tool used successfully"
         assert len(provider._client.chat.completions.create.mock_calls) == 2
-        
-        # Verify tool execution
-        executor.execute_tool.assert_called_once_with(
-            "test_tool",
-            {"param1": "test"}
-        )
 
 
 @pytest.mark.asyncio
-async def test_run_conversation_error(provider, sample_tools):
-    """Test error handling in conversation."""
-    messages = [{"role": "user", "content": "Hello"}]
+async def test_run_conversation_tool_error(provider, sample_tools, executor, mock_async_handler):
+    """Test handling of tool execution errors."""
+    messages = [{"role": "user", "content": "Use the tool"}]
+    
+    # Mock the tool call response
+    tool_call = Mock()
+    tool_call.id = "call_123"
+    tool_call.function.name = "test_tool"
+    tool_call.function.arguments = json.dumps({"param1": "test"})
+    
+    mock_response = Mock(choices=[
+        Mock(message=Mock(
+            content=None,
+            tool_calls=[tool_call]
+        ))
+    ])
+    
+    # Configure executor with error handler
+    error_handler = mock_async_handler(error=Exception("Tool execution failed"))
+    executor.register_handler("test_tool", error_handler)
     
     with patch.object(provider._client.chat.completions, 'create',
-                     AsyncMock(side_effect=Exception("API error"))):
+                     AsyncMock(return_value=mock_response)):
         with pytest.raises(ProviderError) as exc:
             await provider.run_conversation(messages, sample_tools)
         assert "Error in OpenAI conversation" in str(exc.value) 

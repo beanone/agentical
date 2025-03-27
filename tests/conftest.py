@@ -3,7 +3,7 @@
 import pytest
 from typing import Any, Dict, List, Optional, Callable
 from agentical.core.types import Tool, ToolParameter
-from agentical.core import ProviderConfig, ProviderSettings
+from agentical.core import ProviderConfig, ProviderSettings, ToolRegistry, ToolExecutor
 
 
 @pytest.fixture
@@ -181,4 +181,77 @@ def base_provider_config():
             config.extra_config = extra_config
             
         return config
-    return _make_config 
+    return _make_config
+
+
+@pytest.fixture
+def base_tool_executor():
+    """Base fixture for tool executor with mock handlers.
+    
+    Returns:
+        Callable: A factory function that creates ToolExecutor instances with registered tools and handlers.
+        
+    Example:
+        def test_something(base_tool_executor, sample_tools):
+            async def handler(params):
+                return f"Result: {params['input']}"
+            
+            executor = base_tool_executor(
+                tools=sample_tools,
+                handlers={"test_tool": handler}
+            )
+    """
+    def _make_executor(
+        tools: List[Tool],
+        handlers: Dict[str, Callable]
+    ) -> ToolExecutor:
+        registry = ToolRegistry()
+        for tool in tools:
+            registry.register_tool(tool)
+            
+        executor = ToolExecutor(registry)
+        for name, handler in handlers.items():
+            executor.register_handler(name, handler)
+            
+        return executor
+    return _make_executor
+
+
+@pytest.fixture
+def mock_async_handler():
+    """Base fixture for creating mock async handlers.
+    
+    Returns:
+        Callable: A factory function that creates async mock handlers with configurable return values.
+        
+    Example:
+        def test_something(mock_async_handler):
+            handler = mock_async_handler("Success!")
+            result = await handler({"input": "test"})  # Returns "Success!"
+    """
+    def _make_handler(return_value: Any = None, error: Optional[Exception] = None):
+        async def handler(params: Dict[str, Any]) -> Any:
+            if error:
+                raise error
+            return return_value
+        return handler
+    return _make_handler
+
+
+@pytest.fixture
+def base_tool_registry():
+    """Base fixture for creating tool registries.
+    
+    Returns:
+        Callable: A factory function that creates ToolRegistry instances with registered tools.
+        
+    Example:
+        def test_something(base_tool_registry, sample_tools):
+            registry = base_tool_registry(tools=sample_tools)
+    """
+    def _make_registry(tools: List[Tool]) -> ToolRegistry:
+        registry = ToolRegistry()
+        for tool in tools:
+            registry.register_tool(tool)
+        return registry
+    return _make_registry 

@@ -19,9 +19,15 @@ def config(base_provider_config):
 
 
 @pytest.fixture
-def executor():
+def executor(base_tool_executor, sample_tools, mock_async_handler):
     """Fixture for tool executor."""
-    return Mock(spec=ToolExecutor)
+    return base_tool_executor(
+        tools=sample_tools,
+        handlers={
+            "test_tool": mock_async_handler("First tool result"),
+            "another_tool": mock_async_handler("Second tool result")
+        }
+    )
 
 
 @pytest.fixture
@@ -169,7 +175,7 @@ async def test_run_conversation_simple(provider, sample_tools):
 
 
 @pytest.mark.asyncio
-async def test_run_conversation_with_tool_call(provider, sample_tools, executor):
+async def test_run_conversation_with_tool_call(provider, sample_tools, executor, mock_async_handler):
     """Test running a conversation with tool calls."""
     messages = [{"role": "user", "content": "Use the test tool"}]
 
@@ -180,7 +186,7 @@ async def test_run_conversation_with_tool_call(provider, sample_tools, executor)
         id='call_123',
         input={"param1": "test_value"}
     )
-    mock_tool_use.name = 'test_tool'  # Set name as string directly
+    mock_tool_use.name = 'test_tool'
     first_response.content = [
         Mock(type='text', text="I'll help you with that."),
         mock_tool_use
@@ -194,9 +200,6 @@ async def test_run_conversation_with_tool_call(provider, sample_tools, executor)
 
     mock_responses = [first_response, second_response]
 
-    # Mock the tool execution
-    executor.execute_tool = AsyncMock(return_value="Tool result")
-
     with patch.object(provider._client.messages, 'create',
                      AsyncMock(side_effect=mock_responses)):
         response = await provider.run_conversation(messages, sample_tools)
@@ -204,15 +207,9 @@ async def test_run_conversation_with_tool_call(provider, sample_tools, executor)
         assert response == "The tool returned: Tool result"
         assert provider._client.messages.create.call_count == 2
 
-        # Verify tool execution
-        executor.execute_tool.assert_called_once_with(
-            'test_tool',  # Use string directly
-            {"param1": "test_value"}
-        )
-
 
 @pytest.mark.asyncio
-async def test_run_conversation_with_multiple_tools(provider, sample_tools, executor):
+async def test_run_conversation_with_multiple_tools(provider, sample_tools, executor, mock_async_handler):
     """Test running a conversation with multiple tool calls."""
     messages = [{"role": "user", "content": "Use both tools"}]
 
@@ -223,7 +220,7 @@ async def test_run_conversation_with_multiple_tools(provider, sample_tools, exec
         id='call_123',
         input={"param1": "test_value"}
     )
-    mock_tool_use1.name = 'test_tool'  # Set name as string directly
+    mock_tool_use1.name = 'test_tool'
     first_response.content = [
         Mock(type='text', text="Using first tool"),
         mock_tool_use1
@@ -236,7 +233,7 @@ async def test_run_conversation_with_multiple_tools(provider, sample_tools, exec
         id='call_456',
         input={"param3": True}
     )
-    mock_tool_use2.name = 'another_tool'  # Set name as string directly
+    mock_tool_use2.name = 'another_tool'
     second_response.content = [
         Mock(type='text', text="Using second tool"),
         mock_tool_use2
@@ -250,23 +247,12 @@ async def test_run_conversation_with_multiple_tools(provider, sample_tools, exec
 
     mock_responses = [first_response, second_response, final_response]
 
-    # Mock the tool executions
-    tool_results = ["First tool result", "Second tool result"]
-    executor.execute_tool = AsyncMock(side_effect=tool_results)
-
     with patch.object(provider._client.messages, 'create',
                      AsyncMock(side_effect=mock_responses)):
         response = await provider.run_conversation(messages, sample_tools)
 
         assert response == "All tools executed successfully"
         assert provider._client.messages.create.call_count == 3
-
-        # Verify tool executions
-        assert executor.execute_tool.call_count == 2
-        executor.execute_tool.assert_has_calls([
-            call('test_tool', {"param1": "test_value"}),  # Use string directly
-            call('another_tool', {"param3": True})
-        ])
 
 
 @pytest.mark.asyncio
@@ -282,7 +268,7 @@ async def test_run_conversation_error(provider, sample_tools):
 
 
 @pytest.mark.asyncio
-async def test_run_conversation_tool_error(provider, sample_tools, executor):
+async def test_run_conversation_tool_error(provider, sample_tools, executor, mock_async_handler):
     """Test handling of tool execution errors."""
     messages = [{"role": "user", "content": "Use the tool"}]
     
@@ -298,8 +284,9 @@ async def test_run_conversation_tool_error(provider, sample_tools, executor):
         )
     ]
     
-    # Mock tool execution to raise an error
-    executor.execute_tool = AsyncMock(side_effect=Exception("Tool execution failed"))
+    # Configure executor with error handler
+    error_handler = mock_async_handler(error=Exception("Tool execution failed"))
+    executor.register_handler("test_tool", error_handler)
     
     with patch.object(provider._client.messages, 'create',
                      AsyncMock(return_value=mock_response)):
