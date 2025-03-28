@@ -182,3 +182,37 @@ async def test_registry_close(config_file, mock_client):
         
         # Verify all clients were closed
         assert mock_client.close.call_count == 2  # Two servers in config 
+
+@pytest.mark.asyncio
+async def test_registry_load_config_io_error(tmp_path):
+    """Test registry load_config with IOError."""
+    # Create a config path that doesn't exist
+    config_path = str(tmp_path / "nonexistent.json")
+    
+    registry = MCPRegistry(config_path)
+    with pytest.raises(IOError):
+        registry.load_config()
+
+@pytest.mark.asyncio
+async def test_registry_load_config_json_error(tmp_path):
+    """Test registry load_config with invalid JSON."""
+    # Create a config file with invalid JSON
+    config_path = tmp_path / "invalid_config.json"
+    with open(config_path, "w") as f:
+        f.write("{invalid json")
+    
+    registry = MCPRegistry(str(config_path))
+    with pytest.raises(json.JSONDecodeError):
+        registry.load_config()
+
+@pytest.mark.asyncio
+async def test_registry_load_config_validation_error(tmp_path):
+    """Test registry load_config with invalid config structure."""
+    # Create a config file with valid JSON but invalid structure
+    config_path = tmp_path / "invalid_structure.json"
+    with open(config_path, "w") as f:
+        json.dump({"invalid": "structure"}, f)
+    
+    registry = MCPRegistry(str(config_path))
+    with pytest.raises(Exception):
+        registry.load_config() 
