@@ -1,0 +1,75 @@
+@startuml
+skinparam backgroundColor white
+skinparam handwritten false
+
+' States and Lifecycles
+state "Application Lifecycle" as AppLife {
+    [*] --> ServerStarting : start_server
+    ServerStarting --> ServerRunning : success
+    ServerStarting --> ServerFailed : error
+    ServerRunning --> ServerShutdown : shutdown_requested
+    ServerFailed --> ServerShutdown : cleanup
+    ServerShutdown --> [*]
+}
+
+state "Client Lifecycle" as ClientLife {
+    [*] --> Initializing : connect()
+    Initializing --> Ready : initialization_success
+    Initializing --> Failed : initialization_error
+    Ready --> Active : first_request
+    Active --> ShuttingDown : close()
+    ShuttingDown --> [*] : cleanup_complete
+}
+
+state "Request Lifecycle" as ReqLife {
+    [*] --> RequestSent : send_message()
+    RequestSent --> Processing : server_received
+    
+    state Processing {
+        [*] --> InProgress
+        InProgress --> InProgress : progress_notification
+        InProgress --> Completed : success
+        InProgress --> Failed : error
+        InProgress --> Cancelled : cancel_request
+    }
+    
+    Completed --> [*]
+    Failed --> [*]
+    Cancelled --> [*]
+}
+
+' Relationships and Dependencies
+AppLife -[hidden]right-> ClientLife
+ClientLife -[hidden]right-> ReqLife
+
+' Cross-lifecycle dependencies
+ServerRunning -down-> Ready : enables
+Active -up-> RequestSent : initiates
+Processing -up-> Active : updates
+
+note right of AppLife
+  Managed by MCPConnection
+  - Process management
+  - IO handling
+  - Fatal error handling
+end note
+
+note right of ClientLife
+  Managed by MCPClient
+  - Connection state
+  - Capabilities
+  - Message coordination
+end note
+
+note right of ReqLife
+  Per-request State
+  - Message tracking
+  - Progress updates
+  - Response handling
+end note
+
+' Error propagation
+ServerFailed -[#red]-> Failed : propagates
+Failed -[#red]-> ShuttingDown : may trigger
+
+@enduml
