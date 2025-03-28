@@ -70,7 +70,7 @@ class MCPConnection:
     async def connect(self):
         """Start the MCP server process and establish connection."""
         if self.process is not None:
-            self._logger.debug("[lifecycle.application.state] Server already running")
+            self._logger.debug("Server already running")
             return
             
         self._logger.info("[lifecycle.application] Starting: Launching MCP server process")
@@ -104,7 +104,7 @@ class MCPConnection:
         
     async def _read_responses(self):
         """Background task to read and handle server responses."""
-        self._logger.debug("[flow.internal] Starting response reader loop")
+        self._logger.debug("Starting response reader loop")
         try:
             while self.process and not await self.process.stdout.at_eof():
                 try:
@@ -124,26 +124,26 @@ class MCPConnection:
                     
                     try:
                         message = json.loads(line)
-                        self._logger.debug("[flow.message] Received: %s", message)
+                        self._logger.debug("Received message: %s", message)
                         
                         # Handle notifications
                         if "method" in message and "id" not in message:
                             method = message["method"]
                             if method in self._notification_handlers:
-                                self._logger.debug("[flow.notification] Processing: %s", method)
+                                self._logger.debug("Processing notification: %s", method)
                                 await self._notification_handlers[method](message["params"])
                             else:
-                                self._logger.warning("[protocol.message] Unknown: Unrecognized notification method %s", method)
+                                self._logger.warning("Unknown notification method: %s", method)
                         # Handle responses
                         elif "id" in message:
                             msg_id = message["id"]
                             with RequestContext(msg_id):
                                 if msg_id in self._pending_requests:
-                                    self._logger.debug("[flow.response] Completed: Request %s", msg_id)
+                                    self._logger.debug("Request %s received response", msg_id)
                                     self._pending_requests[msg_id].set_result(message)
                                     del self._pending_requests[msg_id]
                                 else:
-                                    self._logger.warning("[protocol.message] Unknown: Response for unknown request %s", msg_id)
+                                    self._logger.warning("Response received for unknown request %s", msg_id)
                             
                     except json.JSONDecodeError as e:
                         # JSON decode errors only affect the current message
@@ -154,7 +154,7 @@ class MCPConnection:
                         if len(self._pending_requests) == 1:
                             msg_id, future = next(iter(self._pending_requests.items()))
                             with RequestContext(msg_id):
-                                self._logger.warning("[protocol.message] Failed: Request %s failed due to invalid JSON", msg_id)
+                                self._logger.warning("Request %s failed due to invalid JSON", msg_id)
                                 future.set_exception(MCPError(MCPErrorCode.INTERNAL_ERROR, error_msg))
                                 del self._pending_requests[msg_id]
                         
@@ -171,7 +171,7 @@ class MCPConnection:
                     return
                 
         finally:
-            self._logger.debug("[flow.internal] Response reader loop ended")
+            self._logger.debug("Response reader loop ended")
             # Connection is closed, fail any remaining requests
             for future in self._pending_requests.values():
                 if not future.done():
@@ -184,7 +184,7 @@ class MCPConnection:
         handler: Callable[[Dict[str, Any]], Awaitable[None]]
     ):
         """Register a handler for notifications of a specific method."""
-        self._logger.debug("[flow.internal] Registered handler for notification method: %s", method)
+        self._logger.debug("Registered handler for notification method: %s", method)
         self._notification_handlers[method] = handler
         
     async def send_message(self, message: Dict[str, Any]) -> Dict[str, Any]:
@@ -200,11 +200,11 @@ class MCPConnection:
         if "id" in message:
             msg_id = message["id"]
             with RequestContext(msg_id):
-                self._logger.debug("[flow.message] Sending: Request %s", msg_id)
+                self._logger.debug("Sending request %s", msg_id)
                 future = asyncio.Future()
                 self._pending_requests[msg_id] = future
         else:
-            self._logger.debug("[flow.message] Sending: Notification %s", message.get("method", "unknown"))
+            self._logger.debug("Sending notification: %s", message.get("method", "unknown"))
             
         # Send message
         msg_json = json.dumps(message)
@@ -216,12 +216,12 @@ class MCPConnection:
             msg_id = message["id"]
             with RequestContext(msg_id):
                 try:
-                    self._logger.debug("[flow.request] Processing: Waiting for response to %s", msg_id)
+                    self._logger.debug("Waiting for response to request %s", msg_id)
                     response = await asyncio.wait_for(future, timeout=5.0)
-                    self._logger.debug("[flow.response] Completed: Request %s", msg_id)
+                    self._logger.debug("Request %s completed", msg_id)
                     return response
                 except asyncio.TimeoutError:
-                    self._logger.warning("[protocol.message] Timeout: Request %s timed out waiting for response", msg_id)
+                    self._logger.warning("Request %s timed out waiting for response", msg_id)
                     del self._pending_requests[msg_id]
                     raise MCPError(
                         MCPErrorCode.INTERNAL_ERROR,
@@ -244,7 +244,7 @@ class MCPConnection:
                 self.process.terminate()
                 await asyncio.wait_for(self.process.wait(), timeout=5.0)
             except asyncio.TimeoutError:
-                self._logger.warning("[lifecycle.application] Shutdown: Server not responding, forcing termination")
+                self._logger.warning("Server not responding to shutdown, forcing termination")
                 self.process.kill()
                 await self.process.wait()
             finally:
@@ -277,14 +277,14 @@ class MCPClient:
     async def _handle_progress(self, params: Dict[str, Any]):
         """Handle progress notification from server."""
         if self.progress_callback:
-            self._logger.debug("[flow.progress] Processing: Progress update received")
+            self._logger.debug("Progress update received")
             progress = MCPProgress(**params)
             await self.progress_callback(progress)
             
     async def connect(self):
         """Connect and initialize the MCP server."""
         if self._initialized:
-            self._logger.debug("[lifecycle.client.state] Client already initialized")
+            self._logger.debug("Client already initialized")
             return
             
         self._logger.info("[lifecycle.client] Starting: Initializing client for server %s", self.server_id)

@@ -696,7 +696,7 @@ async def test_read_responses_invalid_json(config, mock_process, caplog):
         # Verify error was logged
         assert any(
             record.levelname == "WARNING" and
-            "[protocol.message] Invalid: JSON decode error" in record.message
+            "JSON decode error" in record.message
             for record in caplog.records
         )
 

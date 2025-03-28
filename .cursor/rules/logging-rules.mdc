@@ -35,24 +35,25 @@ alwaysApply: false
 
 ### INFO: Lifecycle Events (No Errors)
 Events that indicate normal system operation with no errors:
-1. Application Lifecycle
+1. Application Lifecycle (tag with application-lifecycle)
    - Service starting successfully
    - Service running successfully
    - Service shutting down gracefully
-2. Client Lifecycle
+2. Client Lifecycle (tag with client-lifecycle)
    - Client initialization success
    - Client ready state achieved
    - Client clean shutdown
-3. Request Lifecycle
+3. Request Lifecycle (tag with request-lifecycle)
    - Request processing started
    - Request completed successfully
    - Request cancelled by user
-4. Data Lifecycle (Business Data CRUD)
+4. Data Lifecycle (Business Data CRUD, tag with data-lifecycle)
    - Business object created
    - Business object updated
    - Business object deleted
 
 ### DEBUG: Technical Details
+Debug messages are there to help developer to debug when there is an issue. Debug message does not have any tag. It's sole perpurse is to log detailed info to help debugging issues.
 1. Message Contents
    - Raw request/response payloads
    - Protocol-level messages
@@ -71,7 +72,7 @@ Events that indicate normal system operation with no errors:
    - Background tasks
 
 ### WARNING: Recoverable Issues
-Issues that:
+Tag warnings only if they relate to a lifecycle. Warning log issues that:
 1. Don't immediately impact service availability
    - Retryable timeouts
    - Network glitches
@@ -86,7 +87,7 @@ Issues that:
    - Performance degradation
 
 ### ERROR: Service-Impacting Issues
-Conditions that:
+Tag errors only if they relate to a lifecycle. Error log conditions that:
 1. Disrupt service operation
    - Fatal connection failures
    - Critical resource unavailability
@@ -120,11 +121,11 @@ Example format:
 
 ### 3. Level-Specific Fields
 INFO:
-- State transition details
-- Operation outcomes
-- Performance metrics
+- [Tag] Lifecycle stage
+- Additional detail that applies
 
 WARNING/ERROR:
+- [Tag] Lifecycle stage - if applicable
 - Error codes
 - Stack traces (when applicable)
 - Recovery attempts
@@ -132,7 +133,7 @@ WARNING/ERROR:
 
 DEBUG:
 - Method parameters
-- Internal state
+- Internal state that helps debugging
 - Timing information
 
 ### 4. Security and Privacy
@@ -159,21 +160,21 @@ INFO:
 
 DEBUG:
 ```
-[flow.message] Received: {message contents}
-[state.internal] Cache updated: key=X, size=Y
-[flow.timing] Operation completed in 150ms
+Received: {message contents}
+Cache updated: key=X, size=Y
+Operation completed in 150ms
 ```
 
 WARNING:
 ```
 [lifecycle.request] Retry: Attempt 2/3 for request X
 [resource.connection] Failover: Switching to backup server
-[protocol.message] Unknown: Received unrecognized message type
+Unknown: Received unrecognized message type
 ```
 
 ERROR:
 ```
 [lifecycle.application] Failed: Cannot start service - port in use
 [security.auth] Violated: Invalid authentication attempt
-[data.integrity] Corrupted: Database inconsistency detected
+Corrupted: Database inconsistency detected
 ``` 
