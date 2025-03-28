@@ -56,33 +56,69 @@ class MCPConnection:
         
     async def _read_responses(self):
         """Background task to read and handle server responses."""
-        while self.process and not self.process.stdout.at_eof():
-            try:
-                line = await self.process.stdout.readline()
-                if not line:
-                    break
+        try:
+            while self.process and not self.process.stdout.at_eof():
+                try:
+                    # Read errors are fatal - they mean the connection is broken
+                    line = await self.process.stdout.readline()
+                    if not line:
+                        # EOF reached - fail any pending requests with timeout
+                        for future in self._pending_requests.values():
+                            if not future.done():
+                                future.set_exception(MCPError(
+                                    MCPErrorCode.INTERNAL_ERROR,
+                                    "Timeout waiting for response"
+                                ))
+                        self._pending_requests.clear()
+                        break
                     
-                message = json.loads(line)
-                print(f"Received message: {message}")  # Debug print
-                
-                # Handle notifications
-                if "method" in message and "id" not in message:
-                    method = message["method"]
-                    if method in self._notification_handlers:
-                        print(f"Processing notification for method: {method}")  # Debug print
-                        await self._notification_handlers[method](message["params"])
-                # Handle responses
-                elif "id" in message:
-                    msg_id = message["id"]
-                    if msg_id in self._pending_requests:
-                        self._pending_requests[msg_id].set_result(message)
-                        del self._pending_requests[msg_id]
+                    try:
+                        message = json.loads(line)
+                        print(f"Received message: {message}")  # Debug print
                         
-            except json.JSONDecodeError as e:
-                print(f"Invalid JSON from server: {e}")
-            except Exception as e:
-                print(f"Error reading response: {e}")
+                        # Handle notifications
+                        if "method" in message and "id" not in message:
+                            method = message["method"]
+                            if method in self._notification_handlers:
+                                print(f"Processing notification for method: {method}")  # Debug print
+                                await self._notification_handlers[method](message["params"])
+                        # Handle responses
+                        elif "id" in message:
+                            msg_id = message["id"]
+                            if msg_id in self._pending_requests:
+                                self._pending_requests[msg_id].set_result(message)
+                                del self._pending_requests[msg_id]
+                            
+                    except json.JSONDecodeError as e:
+                        # JSON decode errors only affect the current message
+                        error_msg = f"Invalid JSON from server: {e}. Raw message: {line!r}"
+                        print(error_msg)  # Log the raw message for debugging
+                        
+                        # If there's only one pending request, it was likely waiting for this response
+                        if len(self._pending_requests) == 1:
+                            msg_id, future = next(iter(self._pending_requests.items()))
+                            future.set_exception(MCPError(MCPErrorCode.INTERNAL_ERROR, error_msg))
+                            del self._pending_requests[msg_id]
+                        
+                except Exception as e:
+                    # Any other error (especially read errors) means the connection is dead
+                    error_msg = f"Fatal connection error: {str(e)}"
+                    print(error_msg)
+                    
+                    # Fail all pending requests and stop reading
+                    for future in self._pending_requests.values():
+                        if not future.done():
+                            future.set_exception(MCPError(MCPErrorCode.INTERNAL_ERROR, error_msg))
+                    self._pending_requests.clear()
+                    return
                 
+        finally:
+            # Connection is closed, fail any remaining requests
+            for future in self._pending_requests.values():
+                if not future.done():
+                    future.set_exception(MCPError(MCPErrorCode.INTERNAL_ERROR, "Timeout waiting for response"))
+            self._pending_requests.clear()
+        
     def register_notification_handler(
         self,
         method: str,
