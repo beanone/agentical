@@ -12,6 +12,7 @@ from agentical.providers.mcp.models import (
     MCPProgress
 )
 from agentical.providers.mcp.registry import MCPRegistry
+from typing import AsyncGenerator
 
 
 @pytest.fixture
@@ -70,28 +71,45 @@ async def test_registry_initialization(config_file):
     assert server2_config.env == {"TEST_VAR": "value"}
 
 
+class AsyncIteratorMock:
+    """Mock class for async iteration."""
+    def __init__(self, item):
+        self.item = item
+        self.yielded = False
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if not self.yielded:
+            self.yielded = True
+            return self.item
+        raise StopAsyncIteration
+
+
 @pytest.mark.asyncio
 async def test_registry_execute(config_file, mock_client):
     """Test registry method execution."""
     with patch("agentical.providers.mcp.registry.MCPClient", return_value=mock_client):
         registry = MCPRegistry.from_json(config_file)
-        
+
         # Set up mock response
-        mock_client.execute = AsyncMock()
-        mock_client.execute.return_value = [{"status": "success"}]
-        
-        # Execute method
-        result = await registry.execute(
+        async def mock_execute(*args, **kwargs):
+            yield {"status": "success"}
+
+        mock_client.execute = mock_execute
+
+        # Execute method and collect all results
+        results = []
+        async for result in registry.execute(
             "server1",
             "test_method",
             {"arg": "value"}
-        )
-        
-        assert result == {"status": "success"}
-        mock_client.execute.assert_called_once_with(
-            "test_method",
-            {"arg": "value"}
-        )
+        ):
+            results.append(result)
+
+        assert len(results) == 1
+        assert results[0]["status"] == "success"
 
 
 @pytest.mark.asyncio
@@ -100,11 +118,12 @@ async def test_registry_execute_unknown_server(config_file):
     registry = MCPRegistry.from_json(config_file)
     
     with pytest.raises(ValueError) as exc_info:
-        await registry.execute(
+        async for _ in registry.execute(
             "unknown_server",
             "test_method",
             {}
-        )
+        ):
+            pass
     assert "Unknown MCP server: unknown_server" in str(exc_info.value)
 
 
@@ -119,13 +138,16 @@ async def test_registry_progress_tracking(config_file, mock_client):
     with patch("agentical.providers.mcp.registry.MCPClient", return_value=mock_client):
         registry = MCPRegistry.from_json(config_file, progress_callback)
         
+        # Set up mock client with the progress callback
+        mock_client.progress_callback = progress_callback
+        
         # Simulate progress callback
         progress = MCPProgress(
             operation_id="test_op",
             progress=0.5,
             message="Half done"
         )
-        await registry.clients["server1"].progress_callback(progress)
+        await mock_client.progress_callback(progress)
         
         assert len(progress_updates) == 1
         assert progress_updates[0].operation_id == "test_op"

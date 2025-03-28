@@ -1,7 +1,7 @@
 """Data models for MCP implementation."""
 
 from typing import Dict, Any, Optional, Union, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class MCPErrorCode:
@@ -80,6 +80,13 @@ class MCPConfig(BaseModel):
 class MCPServerConfig(BaseModel):
     """Root configuration for all MCP servers."""
     mcpServers: Dict[str, MCPConfig]
+
+    @model_validator(mode='after')
+    def validate_servers(self) -> 'MCPServerConfig':
+        """Validate that there is at least one server configured."""
+        if not self.mcpServers:
+            raise ValueError("At least one MCP server must be configured")
+        return self
 
 
 class MCPProgress(BaseModel):

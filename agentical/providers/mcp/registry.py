@@ -1,7 +1,7 @@
 """MCP registry implementation."""
 
 import json
-from typing import Dict, Any, Optional, Callable, Awaitable
+from typing import Dict, Any, Optional, Callable, Awaitable, AsyncIterator
 from .models import MCPServerConfig, MCPConfig, MCPProgress
 from .client import MCPClient, ProgressCallback
 
@@ -40,8 +40,21 @@ class MCPRegistry:
                 self.progress_callback
             )
             
-    async def execute(self, server: str, method: str, params: Dict[str, Any]) -> Any:
-        """Execute a method on a specific MCP server."""
+    async def execute(self, server: str, method: str, params: Dict[str, Any]) -> AsyncIterator[Any]:
+        """Execute a method on a specific MCP server.
+        
+        Args:
+            server: The ID of the MCP server to execute on.
+            method: The method name to execute.
+            params: The parameters to pass to the method.
+            
+        Returns:
+            An async iterator yielding results from the method execution.
+            
+        Raises:
+            ValueError: If the server ID is not found.
+            MCPError: If the method execution fails.
+        """
         if server not in self.clients:
             raise ValueError(f"Unknown MCP server: {server}")
             
@@ -51,16 +64,25 @@ class MCPRegistry:
         if not client._initialized:
             await client.connect()
         
-        # Execute method
+        # Execute method and yield all results
         async for result in client.execute(method, params):
-            return result
+            yield result
             
-    async def cancel(self, server: str, message_id: int):
-        """Cancel an ongoing operation on a specific server."""
+    async def cancel(self, server: str, request_id: int):
+        """Cancel an ongoing request on a specific server.
+        
+        Args:
+            server: The ID of the MCP server to cancel on.
+            request_id: The ID of the request to cancel.
+            
+        Raises:
+            ValueError: If the server ID is not found.
+            MCPError: If the cancellation fails.
+        """
         if server not in self.clients:
             raise ValueError(f"Unknown MCP server: {server}")
             
-        await self.clients[server].cancel(message_id)
+        await self.clients[server].cancel(request_id)
             
     async def close(self):
         """Close all MCP client connections."""

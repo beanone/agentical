@@ -63,11 +63,13 @@ class MCPConnection:
                     break
                     
                 message = json.loads(line)
+                print(f"Received message: {message}")  # Debug print
                 
                 # Handle notifications
                 if "method" in message and "id" not in message:
                     method = message["method"]
                     if method in self._notification_handlers:
+                        print(f"Processing notification for method: {method}")  # Debug print
                         await self._notification_handlers[method](message["params"])
                 # Handle responses
                 elif "id" in message:
@@ -81,6 +83,14 @@ class MCPConnection:
             except Exception as e:
                 print(f"Error reading response: {e}")
                 
+    def register_notification_handler(
+        self,
+        method: str,
+        handler: Callable[[Dict[str, Any]], Awaitable[None]]
+    ):
+        """Register a handler for notifications of a specific method."""
+        self._notification_handlers[method] = handler
+        
     async def send_message(self, message: Dict[str, Any]) -> Dict[str, Any]:
         """Send a message to the MCP server and get response."""
         if not self.process or not self.process.stdin or not self.process.stdout:
@@ -89,50 +99,29 @@ class MCPConnection:
                 "Not connected to MCP server"
             )
             
-        # For notifications, just send the message
-        if "id" not in message:
-            msg_json = json.dumps(message) + "\n"
-            self.process.stdin.write(msg_json.encode())
-            await self.process.stdin.drain()
-            return {}
-            
-        # For requests, wait for response
-        try:
+        # Create future for response
+        if "id" in message:
             msg_id = message["id"]
             future = asyncio.Future()
             self._pending_requests[msg_id] = future
             
-            msg_json = json.dumps(message) + "\n"
-            self.process.stdin.write(msg_json.encode())
-            await self.process.stdin.drain()
-            
+        # Send message
+        msg_json = json.dumps(message)
+        await self.process.stdin.write(msg_json.encode() + b"\n")
+        await self.process.stdin.drain()
+        
+        # Wait for response if message has ID
+        if "id" in message:
             try:
-                response = await asyncio.wait_for(future, timeout=30.0)
+                response = await asyncio.wait_for(future, timeout=5.0)
                 return response
             except asyncio.TimeoutError:
                 del self._pending_requests[msg_id]
                 raise MCPError(
                     MCPErrorCode.INTERNAL_ERROR,
-                    "Request timed out"
+                    "Timeout waiting for response"
                 )
-                
-        except Exception as e:
-            if "id" in message:
-                msg_id = message["id"]
-                if msg_id in self._pending_requests:
-                    del self._pending_requests[msg_id]
-            raise MCPError(
-                MCPErrorCode.INTERNAL_ERROR,
-                f"Failed to send/receive message: {str(e)}"
-            )
-        
-    def register_notification_handler(
-        self,
-        method: str,
-        handler: Callable[[Dict[str, Any]], Awaitable[None]]
-    ):
-        """Register a handler for server notifications."""
-        self._notification_handlers[method] = handler
+        return {}
         
     async def close(self):
         """Close the connection to the MCP server."""
@@ -211,7 +200,7 @@ class MCPClient:
                 }
             )
             
-            response_data = await self.connection.send_message(request.dict())
+            response_data = await self.connection.send_message(request.model_dump())
             response = MCPResponse(**response_data)
             
             if response.error:
@@ -242,10 +231,7 @@ class MCPClient:
     async def execute(self, method: str, params: Dict[str, Any]) -> AsyncIterator[Any]:
         """Execute a method on the MCP server."""
         if not self._initialized:
-            raise MCPError(
-                MCPErrorCode.SERVER_NOT_INITIALIZED,
-                "Server not initialized"
-            )
+            await self.initialize()
             
         request = MCPRequest(
             id=self._next_message_id(),
@@ -253,24 +239,33 @@ class MCPClient:
             params=params
         )
         
-        response_data = await self.connection.send_message(request.dict())
-        response = MCPResponse(**response_data)
-        
-        if response.error:
-            raise MCPError(
-                response.error.code,
-                response.error.message,
-                response.error.data
-            )
+        try:
+            response_data = await self.connection.send_message(request.model_dump())
+            response = MCPResponse(**response_data)
             
-        yield response.result
+            if response.error:
+                raise MCPError(
+                    response.error.code,
+                    response.error.message,
+                    response.error.data
+                )
+                
+            yield response.result
+            
+        except Exception as e:
+            if isinstance(e, MCPError):
+                raise
+            raise MCPError(
+                MCPErrorCode.INTERNAL_ERROR,
+                f"Failed to execute method: {str(e)}"
+            )
         
-    async def cancel(self, message_id: int):
-        """Cancel an ongoing operation."""
+    async def cancel(self, request_id: int) -> None:
+        """Cancel an ongoing request."""
         if not self._initialized:
             raise MCPError(
                 MCPErrorCode.SERVER_NOT_INITIALIZED,
-                "Server not initialized"
+                "Client not initialized"
             )
             
         if not self.capabilities or not self.capabilities.cancellation:
@@ -281,10 +276,9 @@ class MCPClient:
             
         notification = MCPNotification(
             method="$/cancel",
-            params={"id": message_id}
+            params={"id": request_id}
         )
-        
-        await self.connection.send_message(notification.dict())
+        await self.connection.send_message(notification.model_dump())
         
     async def close(self):
         """Close the connection to the MCP server."""
@@ -295,14 +289,14 @@ class MCPClient:
                     method="shutdown",
                     params={}
                 )
-                await self.connection.send_message(notification.dict())
+                await self.connection.send_message(notification.model_dump())
                 
                 # Send exit notification
                 notification = MCPNotification(
                     method="exit",
                     params={}
                 )
-                await self.connection.send_message(notification.dict())
+                await self.connection.send_message(notification.model_dump())
             except Exception:
                 # Ignore errors during shutdown
                 pass
@@ -310,3 +304,11 @@ class MCPClient:
         await self.connection.close()
         self.capabilities = None
         self._initialized = False
+
+    async def _send_progress(self, progress: MCPProgress) -> None:
+        """Send a progress notification to the server."""
+        notification = MCPNotification(
+            method="$/progress",
+            params=progress.model_dump()
+        )
+        await self.connection.send_message(notification.model_dump())

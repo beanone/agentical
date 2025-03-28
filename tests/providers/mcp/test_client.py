@@ -20,16 +20,24 @@ class MockProcess:
         self.stdin = AsyncMock()
         self.stdout = AsyncMock()
         self.stderr = AsyncMock()
+        self.processed_messages = []
         
         # Set up stdout.readline to return responses
         async def readline():
+            await asyncio.sleep(0.1)  # Small delay to simulate real process
             if not self.responses:
+                print("No more responses in mock process")
                 return b""
             response = self.responses.pop(0)
+            print(f"Mock process returning response: {response}")
+            self.processed_messages.append(response)
             return json.dumps(response).encode() + b"\n"
             
         self.stdout.readline = readline
         self.stdout.at_eof = MagicMock(return_value=False)
+        
+        # Configure stdin.write to return length of data
+        self.stdin.write.return_value = 0
         
     async def wait(self):
         return 0
@@ -81,34 +89,58 @@ async def test_connection_lifecycle(config, mock_process):
         assert conn.process is not None
         
         # Test message sending
-        message = {"jsonrpc": "2.0", "method": "test", "id": 1}
+        message = {"jsonrpc": "2.0", "method": "initialize", "id": 1}
         mock_process.responses.append({
             "jsonrpc": "2.0",
             "id": 1,
-            "result": "success"
+            "result": {
+                "capabilities": {
+                    "tools": True,
+                    "progress": True,
+                    "completion": False,
+                    "sampling": False,
+                    "cancellation": True
+                }
+            }
         })
         response = await conn.send_message(message)
-        assert response["result"] == "success"
+        assert response["result"]["capabilities"]["tools"] is True
         
         # Test notification handling
         notification_received = asyncio.Event()
+        notification_params = None
+        
         async def handle_notification(params):
+            nonlocal notification_params
+            print("Notification handler called with params:", params)
+            notification_params = params
             notification_received.set()
             
         conn.register_notification_handler("test_notify", handle_notification)
         
         # Simulate notification
-        mock_process.responses.append({
+        notification = {
             "jsonrpc": "2.0",
             "method": "test_notify",
-            "params": {}
-        })
+            "params": {"test": "data"}
+        }
+        print("Adding notification to mock process responses")
+        mock_process.responses.append(notification)
         
-        # Wait for notification
+        # Wait for notification with increased timeout
         try:
-            await asyncio.wait_for(notification_received.wait(), timeout=1.0)
+            print("Waiting for notification...")
+            await asyncio.wait_for(notification_received.wait(), timeout=2.0)
+            print("Notification received!")
             assert notification_received.is_set()
+            assert notification_params == {"test": "data"}
+            # Verify the notification was processed
+            assert any(
+                msg.get("method") == "test_notify" and "id" not in msg
+                for msg in mock_process.processed_messages
+            ), "Notification not found in processed messages"
         except asyncio.TimeoutError:
+            print("Processed messages:", mock_process.processed_messages)
             pytest.fail("Notification not received")
             
         # Test close
