@@ -8,7 +8,7 @@ A simple, flexible framework for building tool-enabled AI agents in Python. Agen
 
 ## Features
 
-- 🔌 **LLM Integration**: Built-in support for OpenAI and Anthropic, with an extensible provider system
+- 🔌 **LLM Integration**: Built-in support for OpenAI, Anthropic, and MCP, with an extensible provider system
 - 🛠️ **Flexible Tool System**: Easy-to-use interface for creating and managing tools
 - 🔒 **Type Safety**: Full type hints and runtime type checking with Pydantic
 - 🧩 **Modular Design**: Easily extend with new providers and tools
@@ -24,6 +24,12 @@ pip install agentical
 
 # With LLM support (OpenAI and Anthropic)
 pip install agentical[llm]
+
+# With MCP support
+pip install agentical[mcp]
+
+# With all providers
+pip install agentical[all]
 
 # With development tools
 pip install agentical[dev]
@@ -303,3 +309,101 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - Thanks to all contributors
 - Inspired by various agent frameworks in the Python ecosystem 
+
+## Provider Support
+
+### MCP Integration
+
+Agentical provides first-class support for MCP (Mission Control Platform). Here's how to use it:
+
+1. Set up MCP configuration:
+
+```python
+from agentical import ToolRegistry, ToolExecutor
+from agentical.providers.mcp import MCPProvider, MCPConfig
+
+# Configure MCP
+mcp_config = MCPConfig(
+    api_key="your_mcp_api_key",
+    model="mcp-default-model"  # or your chosen model
+)
+
+# Create MCP provider
+provider = MCPProvider(config=mcp_config)
+
+# Set up tool registry and executor as usual
+registry = ToolRegistry()
+executor = ToolExecutor(registry)
+
+# Register your tools
+@tool(
+    name="example_tool",
+    description="Example tool for MCP",
+    parameters={
+        "param1": "Description of parameter 1",
+        "param2": "Description of parameter 2"
+    }
+)
+async def example_tool(param1: str, param2: int) -> dict:
+    return {"result": f"Processed {param1} with {param2}"}
+
+registry.register_tool(example_tool)
+
+# Create integration
+integration = provider.create_integration(registry=registry, executor=executor)
+
+# Use the integration
+response = await integration.run_conversation([
+    {"role": "user", "content": "Use the example tool with param1='test' and param2=42"}
+])
+```
+
+2. Using MCP-specific features:
+
+```python
+from agentical.providers.mcp import MCPToolDecorator
+
+# Use MCP-specific tool decorator for enhanced functionality
+@MCPToolDecorator(
+    name="mcp_tool",
+    description="MCP-specific tool example",
+    mcp_specific_param="value"
+)
+async def mcp_specific_tool(param: str) -> dict:
+    return {"mcp_result": param}
+
+# Register MCP-specific tools
+registry.register_tool(mcp_specific_tool)
+```
+
+3. Advanced MCP Configuration:
+
+```python
+from agentical.providers.mcp import MCPConfig, MCPFeatures
+
+# Configure advanced MCP features
+config = MCPConfig(
+    api_key="your_mcp_api_key",
+    model="mcp-default-model",
+    features=MCPFeatures(
+        enable_streaming=True,
+        enable_tool_choice=True,
+        custom_handlers=True
+    ),
+    timeout=30,
+    max_retries=3
+)
+```
+
+4. Error Handling:
+
+```python
+from agentical.providers.mcp import MCPError, MCPTimeoutError
+
+try:
+    response = await integration.run_conversation(messages)
+except MCPTimeoutError:
+    print("MCP request timed out")
+except MCPError as e:
+    print(f"MCP error occurred: {e}")
+``` 
