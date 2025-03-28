@@ -61,6 +61,8 @@ class MockProcess:
         self._closed = False
         self._logger = logging.getLogger(__name__ + ".MockProcess")
         self._read_lock = asyncio.Lock()
+        self.pid = 12345  # Mock process ID
+        self.stdout = self
         
         # Configure stdin.write to track outgoing messages
         async def mock_write(data):
@@ -76,9 +78,6 @@ class MockProcess:
                 pass
             return len(data)
         self.stdin.write = AsyncMock(side_effect=mock_write)
-        
-        # Configure stdout
-        self.stdout = self
         
         self._logger.debug("MockProcess initialized")
         
@@ -111,7 +110,7 @@ class MockProcess:
             # If it's a dict/list, it's meant to be JSON
             return json.dumps(response).encode() + b"\n"
             
-    def at_eof(self):
+    async def at_eof(self):
         """Check if the process is closed."""
         return self._closed
         
@@ -630,52 +629,80 @@ async def test_read_responses_fatal_error(config, mock_process):
     # Configure mock process to raise a read error
     mock_process.stdout.readline = AsyncMock(side_effect=IOError("Read error"))
     
-    with patch("builtins.print") as mock_print:
-        with patch("asyncio.create_subprocess_exec", return_value=mock_process):
-            conn = MCPConnection(config)
-            await conn.connect()
-            
-            # Send a message - should fail due to fatal error
-            with pytest.raises(MCPError) as exc_info:
-                await conn.send_message({"id": 1, "method": "test"})
-            
-            # Verify error handling
-            assert exc_info.value.code == MCPErrorCode.INTERNAL_ERROR
-            assert "Fatal connection error" in str(exc_info.value)
-            mock_print.assert_any_call("Fatal connection error: Read error")
+    with patch("asyncio.create_subprocess_exec", return_value=mock_process):
+        conn = MCPConnection(config)
+        await conn.connect()
+        
+        # Send a message - should fail due to fatal error
+        with pytest.raises(MCPError) as exc_info:
+            await conn.send_message({"id": 1, "method": "test"})
+        
+        # Verify error handling and connection state
+        assert exc_info.value.code == MCPErrorCode.INTERNAL_ERROR
+        assert "Fatal connection error" in str(exc_info.value)
+        assert conn.process is not None  # Process cleanup happens in close()
+        assert not conn._pending_requests  # All pending requests should be cleared
+        
+        # Verify connection is unusable after fatal error
+        with pytest.raises(MCPError) as exc_info:
+            await conn.send_message({"id": 2, "method": "test"})
+        assert exc_info.value.code == MCPErrorCode.INTERNAL_ERROR
 
 
 @pytest.mark.asyncio
-async def test_read_responses_invalid_json(config, mock_process):
+async def test_read_responses_logs_error(config, mock_process, caplog):
+    """Test that read_responses logs errors properly."""
+    # Configure mock process to raise an error
+    mock_process.stdout.readline = AsyncMock(side_effect=RuntimeError("Read error"))
+
+    with patch("asyncio.create_subprocess_exec", return_value=mock_process):
+        conn = MCPConnection(config)
+        await conn.connect()
+        await asyncio.sleep(0.1)  # Give time for error to be logged
+
+        # Verify error was logged
+        assert any(
+            record.levelname == "ERROR" and
+            "[lifecycle.application] Fatal connection error: Read error" in record.message
+            for record in caplog.records
+        )
+
+
+@pytest.mark.asyncio
+async def test_read_responses_invalid_json(config, mock_process, caplog):
     """Test that JSON decode errors only fail the current message."""
     # Track what's been read
     read_count = 0
-    
+
     async def mock_readline():
         nonlocal read_count
         read_count += 1
         if read_count == 1:
             return b"invalid json\n"
-        elif read_count == 2:
-            return json.dumps({"id": 1, "result": "success"}).encode() + b"\n"
-        return b""
-    
+        return b""  # EOF after invalid JSON
+
     mock_process.stdout.readline = mock_readline
-    
-    with patch("builtins.print") as mock_print:
-        with patch("asyncio.create_subprocess_exec", return_value=mock_process):
-            conn = MCPConnection(config)
-            await conn.connect()
-            
-            # First message should fail with JSON error
-            with pytest.raises(MCPError) as exc_info:
-                await conn.send_message({"id": 1, "method": "test"})
-            assert "Invalid JSON from server" in str(exc_info.value)
-            
-            # Verify error was logged with raw message
-            mock_print.assert_any_call("Invalid JSON from server: Expecting value: line 1 column 1 (char 0). Raw message: b'invalid json\\n'")
-            
-            await conn.close()
+
+    with patch("asyncio.create_subprocess_exec", return_value=mock_process):
+        conn = MCPConnection(config)
+        await conn.connect()
+
+        # Message should fail with JSON error
+        with pytest.raises(MCPError) as exc_info:
+            await conn.send_message({"id": 1, "method": "test"})
+        assert exc_info.value.code == MCPErrorCode.INTERNAL_ERROR
+        assert "Invalid JSON from server" in str(exc_info.value)
+
+        # Verify error was logged
+        assert any(
+            record.levelname == "ERROR" and
+            "[lifecycle.application] Protocol error" in record.message and
+            "Invalid JSON from server" in record.message
+            for record in caplog.records
+        )
+
+        # Connection should be closed after error
+        assert not conn._pending_requests  # Request should be cleared
 
 
 @pytest.mark.asyncio
@@ -694,30 +721,17 @@ async def test_read_responses_eof(config, mock_process):
         
         assert exc_info.value.code == MCPErrorCode.INTERNAL_ERROR
         assert "Timeout" in str(exc_info.value)
-
-
-@pytest.mark.asyncio
-async def test_read_responses_logs_error(config, mock_process):
-    """Test that read_responses logs errors properly."""
-    # Configure mock process to raise an error
-    mock_process.stdout.readline = AsyncMock(side_effect=RuntimeError("Read error"))
-    
-    with patch("builtins.print") as mock_print:
-        with patch("asyncio.create_subprocess_exec", return_value=mock_process):
-            conn = MCPConnection(config)
-            await conn.connect()
-            await asyncio.sleep(0.1)  # Give time for error to be logged
-            
-            # Verify error was logged
-            mock_print.assert_any_call("Fatal connection error: Read error")
+        assert not conn._pending_requests  # Request should be cleared
+        
+        # Connection should be closed after EOF
+        assert conn.process is not None  # Process cleanup happens in close()
+        await conn.close()
+        assert conn.process is None
 
 
 @pytest.mark.asyncio
 async def test_read_responses_continues_after_error(config, mock_process):
     """Test that non-fatal errors don't kill the connection."""
-    logger = logging.getLogger(__name__ + ".test_read_responses_continues_after_error")
-    logger.info("Starting test_read_responses_continues_after_error")
-    
     # Set up mock responses - first invalid JSON, then valid response
     mock_process.responses = [
         b"invalid json\n",
@@ -730,21 +744,22 @@ async def test_read_responses_continues_after_error(config, mock_process):
         
         try:
             # First message should fail with JSON error
-            logger.debug("Sending first message (expecting JSON error)")
             with pytest.raises(MCPError) as exc_info:
                 await conn.send_message({"id": 1, "method": "test"})
+            assert exc_info.value.code == MCPErrorCode.INTERNAL_ERROR
             assert "Invalid JSON from server" in str(exc_info.value)
-            logger.debug("First message failed as expected with JSON error")
+            
+            # Connection state should be preserved
+            assert conn.process is not None
+            assert not conn._pending_requests
             
             # Second message should succeed
-            logger.debug("Sending second message")
             response = await conn.send_message({"id": 2, "method": "test"})
-            logger.debug(f"Received response: {response}")
             assert response == {"id": 2, "result": "success"}
-            logger.info("Test completed successfully")
         finally:
-            logger.debug("Cleaning up connection")
             await conn.close()
+            assert conn.process is None
+            assert not conn._pending_requests
 
 
 @pytest.mark.asyncio
@@ -768,4 +783,164 @@ async def test_unknown_notification(config, mock_process):
         assert any(
             msg.get("method") == "unknown_method"
             for msg in mock_process.processed_messages
-        ) 
+        )
+
+
+@pytest.mark.asyncio
+async def test_double_connect(config, mock_process):
+    """Test that connecting twice is safe."""
+    with patch("asyncio.create_subprocess_exec", return_value=mock_process):
+        conn = MCPConnection(config)
+        await conn.connect()  # First connect
+        await conn.connect()  # Second connect should be no-op
+        assert conn.process is mock_process
+
+
+@pytest.mark.asyncio
+async def test_connect_failure_handling(config):
+    """Test handling of connection failures."""
+    with patch("asyncio.create_subprocess_exec", side_effect=OSError("Failed to start")):
+        conn = MCPConnection(config)
+        with pytest.raises(OSError, match="Failed to start"):
+            await conn.connect()
+        assert conn.process is None
+
+
+@pytest.mark.asyncio
+async def test_notification_handler_lifecycle(config, mock_process):
+    """Test registration and handling of notification handlers."""
+    notifications = []
+    
+    async def handler(params):
+        notifications.append(params)
+    
+    with patch("asyncio.create_subprocess_exec", return_value=mock_process):
+        conn = MCPConnection(config)
+        await conn.connect()
+        
+        # Register handler and verify registration
+        conn.register_notification_handler("test", handler)
+        assert "test" in conn._notification_handlers
+        
+        # Queue a notification in the mock process's response queue
+        mock_process.responses.append({
+            "method": "test",
+            "params": {"value": 123}
+        })
+        
+        # Wait for notification processing
+        await asyncio.sleep(0.1)
+        assert len(notifications) == 1
+        assert notifications[0] == {"value": 123}
+
+
+@pytest.mark.asyncio
+async def test_close_error_handling(config, mock_process):
+    """Test error handling during close."""
+    with patch("asyncio.create_subprocess_exec", return_value=mock_process):
+        conn = MCPConnection(config)
+        await conn.connect()
+        
+        # Replace kill method with one that raises an error
+        original_kill = mock_process.kill
+        def failing_kill():
+            raise ProcessLookupError("Process already dead")
+        mock_process.kill = failing_kill
+        
+        try:
+            # Close should handle the error gracefully
+            await conn.close()
+            assert conn.process is None
+        finally:
+            # Restore original kill method for cleanup
+            mock_process.kill = original_kill
+
+
+@pytest.mark.asyncio
+async def test_progress_callback(config, mock_process):
+    """Test progress callback handling."""
+    progress_updates = []
+    
+    def progress_callback(progress):
+        progress_updates.append(progress)
+    
+    with patch("asyncio.create_subprocess_exec", return_value=mock_process):
+        client = MCPClient("test", config, progress_callback=progress_callback)
+        await client.connect()
+        
+        # Queue a progress notification in the mock process's response queue
+        mock_process.responses.append({
+            "method": "$/progress",
+            "params": {
+                "operation_id": "test_op_1",
+                "progress": 0.5,
+                "message": "Processing...",
+                "data": {"step": 1},
+                "is_final": False
+            }
+        })
+        
+        # Wait for progress processing
+        await asyncio.sleep(0.1)
+        assert len(progress_updates) == 1
+        assert progress_updates[0].operation_id == "test_op_1"
+        assert progress_updates[0].progress == 0.5
+        assert progress_updates[0].message == "Processing..."
+        assert progress_updates[0].data == {"step": 1}
+        assert not progress_updates[0].is_final
+
+
+@pytest.mark.asyncio
+async def test_cancel_request(config, mock_process):
+    """Test cancellation of requests."""
+    with patch("asyncio.create_subprocess_exec", return_value=mock_process):
+        client = MCPClient("test", config)
+        await client.connect()
+        
+        # Queue the initial response that indicates the request is in progress
+        mock_process.responses.append({
+            "jsonrpc": "2.0",
+            "method": "$/progress",
+            "params": {
+                "operation_id": "test_op",
+                "progress": 0.5,
+                "message": "Processing..."
+            }
+        })
+        
+        # Start the request
+        request_gen = client.execute("test", {"param": "value"})
+        request_task = asyncio.create_task(anext(request_gen))
+        
+        # Wait for the request to be processed (slightly longer than mock's 0.01s delay)
+        await asyncio.sleep(0.02)
+        
+        # Queue the error response that will be returned after cancellation
+        mock_process.responses.append({
+            "jsonrpc": "2.0",
+            "id": 2,  # This will be the ID of our execute request
+            "error": {
+                "code": MCPErrorCode.INTERNAL_ERROR,
+                "message": "Operation cancelled"
+            }
+        })
+        
+        # Send the cancellation request
+        await client.cancel(2)  # Cancel request ID 2
+        
+        # Verify the cancellation request was sent
+        cancel_requests = [
+            msg for msg in mock_process.processed_messages
+            if msg.get("method") == "$/cancel"
+        ]
+        assert len(cancel_requests) == 1
+        assert cancel_requests[0]["params"]["id"] == 2
+        
+        # Verify the original request receives the cancellation error
+        with pytest.raises(MCPError) as exc_info:
+            await request_task
+        assert exc_info.value.code == MCPErrorCode.INTERNAL_ERROR
+        assert "Operation cancelled" in str(exc_info.value)
+
+
+        assert "Operation cancelled" in str(exc_info.value) 
