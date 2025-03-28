@@ -663,7 +663,7 @@ async def test_read_responses_logs_error(config, mock_process, caplog):
         # Verify error was logged
         assert any(
             record.levelname == "ERROR" and
-            "[lifecycle.application] Fatal connection error: Read error" in record.message
+            "[lifecycle.application] Failed: Fatal IO error - Read error" in record.message
             for record in caplog.records
         )
 
@@ -695,9 +695,8 @@ async def test_read_responses_invalid_json(config, mock_process, caplog):
 
         # Verify error was logged
         assert any(
-            record.levelname == "ERROR" and
-            "[lifecycle.application] Protocol error" in record.message and
-            "Invalid JSON from server" in record.message
+            record.levelname == "WARNING" and
+            "[protocol.message] Invalid: JSON decode error" in record.message
             for record in caplog.records
         )
 
