@@ -1,0 +1,180 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Lessons learned during development
+
+## Testing guidelines
+
+### Test Behavior, Not Implementation
+- Instead of testing log/print messages (implementation details), we should test:
+- State changes (conn.process, _pending_requests)
+- Error conditions (correct exceptions with proper error codes)
+- System behavior (connection usability after errors)
+- Recovery capabilities (continuing after non-fatal errors)
+
+### Clear Test Focus
+- Each test should have a clear, single purpose
+- Tests should verify outcomes, not how we got there
+- Test names and docstrings should clearly indicate what's being tested
+- Assertions should focus on critical behavioral aspects
+
+### Test Independence
+- Tests shouldn't depend on implementation details like log messages
+- Changes to logging shouldn't break tests
+- Tests should be resilient to refactoring
+
+### Better Error Handling Testing
+- Verify the system state after errors
+- Check cleanup and resource management
+- Ensure proper error propagation
+- Test recovery mechanisms
+
+## What to log and Logging levels
+
+### INFO: Lifecycle Events (No Errors)
+Events that indicate normal system operation with no errors:
+1. Application Lifecycle (tag with application-lifecycle)
+   - Service starting successfully
+   - Service running successfully
+   - Service shutting down gracefully
+2. Client Lifecycle (tag with client-lifecycle)
+   - Client initialization success
+   - Client ready state achieved
+   - Client clean shutdown
+3. Request Lifecycle (tag with request-lifecycle)
+   - Request processing started
+   - Request completed successfully
+   - Request cancelled by user
+4. Data Lifecycle (Business Data CRUD, tag with data-lifecycle)
+   - Business object created
+   - Business object updated
+   - Business object deleted
+
+### DEBUG: Technical Details
+Debug messages are there to help developer to debug when there is an issue. Debug message does not have any tag. It's sole perpurse is to log detailed info to help debugging issues.
+1. Message Contents
+   - Raw request/response payloads
+   - Protocol-level messages
+   - Data transformations
+2. State Changes
+   - Internal state updates
+   - Temporary states
+   - Transition details
+3. Flow Information
+   - Method entry/exit
+   - Processing steps
+   - Timing details
+4. Internal Operations
+   - Cache operations
+   - Resource allocation
+   - Background tasks
+
+### WARNING: Recoverable Issues
+Tag warnings only if they relate to a lifecycle. Warning log issues that:
+1. Don't immediately impact service availability
+   - Retryable timeouts
+   - Network glitches
+   - Resource contention
+2. Have automatic recovery mechanisms
+   - Failover activation
+   - Connection re-establishment
+   - Request retries
+3. May require investigation if frequency increases
+   - Unknown message types
+   - Unexpected state transitions
+   - Performance degradation
+
+### ERROR: Service-Impacting Issues
+Tag errors only if they relate to a lifecycle. Error log conditions that:
+1. Disrupt service operation
+   - Fatal connection failures
+   - Critical resource unavailability
+   - Unrecoverable protocol errors
+2. Require immediate operator attention
+   - Security violations
+   - Data corruption
+   - Configuration failures
+3. Cannot be automatically recovered
+   - System state corruption
+   - Unhandled exceptions
+   - Resource exhaustion
+
+## Structured Logging Guidelines
+
+### 1. Log Message Structure
+- Component: Which part of the system is logging
+- Type: The type of log entry (state/transition/error)
+- Action: What is happening
+- Details: Relevant context
+
+Example format:
+`[component.type] Action: Details`
+
+### 2. Required Context Fields
+- Timestamp (added by logging framework)
+- Service name/version
+- Request/Correlation ID
+- Operation name
+- Environment (prod/staging/dev)
+
+### 3. Level-Specific Fields
+INFO:
+- [Tag] Lifecycle stage
+- Additional detail that applies
+
+WARNING/ERROR:
+- [Tag] Lifecycle stage - if applicable
+- Error codes
+- Stack traces (when applicable)
+- Recovery attempts
+- Mitigation steps
+
+DEBUG:
+- Method parameters
+- Internal state that helps debugging
+- Timing information
+
+### 4. Security and Privacy
+- Never log sensitive data (credentials, tokens)
+- Mask PII (emails, addresses)
+- Truncate large payloads
+- Follow data protection regulations
+
+### 5. Operational Considerations
+- Keep messages human-readable
+- Make logs searchable
+- Include relevant IDs
+- Consider log aggregation
+- Plan for log rotation
+
+### 6. Examples
+
+INFO:
+```
+[lifecycle.application] Starting: Initializing core services
+[lifecycle.client] Ready: Client initialized successfully
+[lifecycle.request] Completed: Request processed successfully
+```
+
+DEBUG:
+```
+Received: {message contents}
+Cache updated: key=X, size=Y
+Operation completed in 150ms
+```
+
+WARNING:
+```
+[lifecycle.request] Retry: Attempt 2/3 for request X
+[resource.connection] Failover: Switching to backup server
+Unknown: Received unrecognized message type
+```
+
+ERROR:
+```
+[lifecycle.application] Failed: Cannot start service - port in use
+[security.auth] Violated: Invalid authentication attempt
+Corrupted: Database inconsistency detected
+``` 

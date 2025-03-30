@@ -1,0 +1,20 @@
+@startuml
+participant "MCPToolProvider" as Client
+participant "LLMBackend" as LLM
+participant "MCPClient" as MCP
+participant "MCPSession" as Session
+participant "MCP Tools" as Tools
+
+Client -> MCP: Initialize with config
+MCP -> Session: Create session
+Session -> Tools: Discover available tools
+Client -> LLM: Initialize backend
+
+note over Client, Tools: Query Processing Flow
+Client -> LLM: Process query
+LLM -> Session: Request tool execution
+Session -> Tools: Execute tool
+Tools --> Session: Tool result
+Session --> LLM: Tool response
+LLM --> Client: Final response
+@enduml 

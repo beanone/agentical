@@ -1,6 +1,3 @@
-# Environment variables
-.env
-
 # Python
 __pycache__/
 *.py[cod]
@@ -27,6 +24,7 @@ MANIFEST
 # Virtual Environments
 .env
 .venv
+.config.json
 env/
 venv/
 ENV/
