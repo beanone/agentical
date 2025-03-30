@@ -84,29 +84,29 @@ class SchemaAdapter:
 
     def convert_mcp_tools_to_anthropic(self, tools: List[MCPTool]) -> List[Dict[str, Any]]:
         """Convert MCP tools to Anthropic format."""
+        logger.debug("TEST LOG - Starting tool conversion")
         logger.debug(f"Converting {len(tools)} MCP tools to Anthropic format")
         formatted_tools = []
         
         for tool in tools:
-            logger.debug(f"Converting tool: {tool.name}")
-            logger.debug(f"Tool description: {tool.description}")
-            logger.debug(f"Tool parameters: {json.dumps(tool.parameters if hasattr(tool, 'parameters') else {}, indent=2)}")
-            
-            # Create Anthropic tool format
+            # Create Anthropic tool format - matching reference implementation exactly
             formatted_tool = {
-                "type": "custom",  # Using "custom" as per Anthropic's requirements
+                "type": "custom",
                 "name": tool.name,
-                "description": tool.description,
-                "input_schema": {
+                "description": tool.description,  # description at top level
+                "input_schema": {  # input_schema at top level
                     "type": "object",
                     "properties": {},
                     "required": []
                 }
             }
             
-            # Get and clean the schema
+            # Get and clean the schema from the tool's parameters
             if hasattr(tool, 'parameters'):
                 schema = self.clean_schema(tool.parameters)
+                logger.debug(f"Cleaned schema for {tool.name}: {json.dumps(schema, indent=2)}")
+                
+                # Copy over properties and required fields
                 if "properties" in schema:
                     formatted_tool["input_schema"]["properties"] = schema["properties"]
                 if "required" in schema:
@@ -165,15 +165,12 @@ class SchemaAdapter:
             logger.debug(f"Processing response content blocks: {len(response.content)} blocks")
             for block in response.content:
                 logger.debug(f"Processing content block type: {block.type}")
-                if block.type == "tool_calls":
-                    for tool_call in block.tool_calls:
-                        if hasattr(tool_call, 'function'):
-                            logger.debug(f"Extracted tool call: {tool_call.function.name}")
-                            logger.debug(f"Tool arguments: {json.dumps(tool_call.function.arguments, indent=2)}")
-                            tool_calls.append((
-                                tool_call.function.name,
-                                tool_call.function.arguments
-                            ))
+                if block.type == "tool_use":
+                    logger.debug(f"Found tool_use block: {json.dumps(block.dict(), indent=2)}")
+                    tool_calls.append((
+                        block.name,
+                        block.parameters
+                    ))
         
         logger.debug(f"Extracted {len(tool_calls)} tool calls")
         return tool_calls 

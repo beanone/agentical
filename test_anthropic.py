@@ -5,11 +5,25 @@ import json
 import sys
 from pathlib import Path
 import argparse
+import logging
+import os
 
 from dotenv import load_dotenv
 
 from anthropic_backend.anthropic_chat import AnthropicBackend
 from agentical.integration.mcp.provider import MCPToolProvider
+
+# # Configure debug logging
+# logging.basicConfig(
+#     level=logging.DEBUG,
+#     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+# )
+
+# Enable debug logging for schema adapter
+logging.getLogger('anthropic_backend.schema_adapter').setLevel(logging.DEBUG)
+logging.getLogger('anthropic_backend.anthropic_chat').setLevel(logging.DEBUG)
+
+logger = logging.getLogger(__name__)
 
 # Load environment variables (including ANTHROPIC_API_KEY)
 load_dotenv()
