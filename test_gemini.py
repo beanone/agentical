@@ -5,11 +5,9 @@ import json
 import sys
 from pathlib import Path
 import argparse
-from typing import Dict
 
 from dotenv import load_dotenv
 
-from agentical.core.llm_backend import LLMBackend
 from gemini_backend.gemini_chat import GeminiBackend
 from agentical.integration.mcp.provider import MCPToolProvider
 
