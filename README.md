@@ -119,6 +119,8 @@ The framework follows a clean, layered architecture with compile-time LLM backen
 └─────────────────┘
 ```
 
+For a more detailed view of the system architecture and component relationships, see the [Component Diagram](docs/core-components.puml).
+
 ### Key Components
 
 - **MCPToolProvider**: Main facade coordinating LLM and MCP interactions
