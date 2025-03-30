@@ -12,7 +12,6 @@ from mcp.types import Tool as MCPTool
 from mcp.types import CallToolResult
 
 from agentical.core import LLMBackend
-from gemini import GeminiBackend
 
 
 class MCPToolProvider:
@@ -22,17 +21,22 @@ class MCPToolProvider:
     between the LLM Layer and MCP Layer.
     """
     
-    def __init__(self, llm_backend: Optional[LLMBackend] = None):
+    def __init__(self, llm_backend: LLMBackend):
         """Initialize the MCP Tool Provider.
         
         Args:
-            llm_backend: Optional LLMBackend instance. If not provided,
-                        defaults to GeminiBackend.
+            llm_backend: LLMBackend instance to use for processing queries.
+            
+        Raises:
+            TypeError: If llm_backend is None or not an instance of LLMBackend.
         """
-        self.session: Optional[ClientSession] = None
+        if not isinstance(llm_backend, LLMBackend):
+            raise TypeError("llm_backend must be an instance of LLMBackend")
+            
+        self.session: ClientSession | None = None
         self.exit_stack = AsyncExitStack()
         self.available_servers: Dict[str, dict] = {}
-        self.llm_backend = llm_backend or GeminiBackend()
+        self.llm_backend = llm_backend
         self.tools: List[MCPTool] = []
         
     @staticmethod
