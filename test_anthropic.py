@@ -1,4 +1,4 @@
-"""Test script for MCPToolProvider, mirroring client.py functionality."""
+"""Test script for MCPToolProvider with Anthropic backend."""
 
 import asyncio
 import json
@@ -8,10 +8,10 @@ import argparse
 
 from dotenv import load_dotenv
 
-from openai_backend.openai_chat import OpenAIBackend
+from anthropic_backend.anthropic_chat import AnthropicBackend
 from agentical.integration.mcp.provider import MCPToolProvider
 
-# Load environment variables (including GEMINI_API_KEY)
+# Load environment variables (including ANTHROPIC_API_KEY)
 load_dotenv()
 
 
@@ -54,13 +54,13 @@ async def main():
     if not Path(config_path).exists():
         print(f"Error: Configuration file '{config_path}' not found.")
         print("Please provide a valid configuration file using --config or -c option.")
-        print("Example: python test_mcp_provider.py --config my_config.json")
+        print("Example: python test_anthropic.py --config my_config.json")
         sys.exit(1)
         
-    # Initialize the Gemini backend
-    llm_backend = OpenAIBackend()
+    # Initialize the Anthropic backend
+    llm_backend = AnthropicBackend()
     
-    # Initialize provider with the Gemini backend
+    # Initialize provider with the Anthropic backend
     provider = MCPToolProvider(llm_backend=llm_backend)
     
     try:
