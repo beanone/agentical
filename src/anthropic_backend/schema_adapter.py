@@ -1,10 +1,12 @@
-"""Schema adapter for converting between MCP and Anthropic schemas."""
+"""Schema adapter for converting between MCP and Anthropic formats."""
 
 import json
 import logging
-from typing import Any, Dict, List, Set
+import re
+from typing import Any, Dict, List, Set, Tuple
 
 from anthropic.types import Message, MessageParam
+
 from mcp.types import Tool as MCPTool
 
 logger = logging.getLogger(__name__)
@@ -20,68 +22,19 @@ class SchemaAdapter:
         "additionalProperties"
     }
 
-    # Default model to use for Anthropic API
-    DEFAULT_MODEL: str = "claude-3-opus-20240229"
-
     @staticmethod
-    def clean_schema(schema: Dict[str, Any]) -> Dict[str, Any]:
-        """Recursively removes unsupported fields from the JSON schema."""
-        logger.debug(f"Cleaning schema: {json.dumps(schema, indent=2)}")
-        cleaned = SchemaAdapter._clean_schema_internal(schema)
-        logger.debug(f"Cleaned schema result: {json.dumps(cleaned, indent=2)}")
-        return cleaned
-
-    @staticmethod
-    def _clean_schema_internal(schema: Dict[str, Any]) -> Dict[str, Any]:
-        if not isinstance(schema, dict):
-            return schema
-            
-        cleaned = {}
+    def extract_answer(text: str) -> str:
+        """Extract the content within <answer> tags, or return the full text if not found.
         
-        # First pass: collect all properties
-        for key, value in schema.items():
-            # Skip unsupported fields unless they're required properties
-            if key in SchemaAdapter.UNSUPPORTED_SCHEMA_FIELDS and key != "required":
-                logger.debug(f"Skipping unsupported field: {key}")
-                continue
-                
-            # Recursively clean nested objects
-            if isinstance(value, dict):
-                cleaned[key] = SchemaAdapter._clean_schema_internal(value)
-            # Handle arrays with item definitions
-            elif key == "items" and isinstance(value, dict):
-                cleaned[key] = SchemaAdapter._clean_schema_internal(value)
-            # Handle arrays of schemas
-            elif isinstance(value, list):
-                cleaned[key] = [
-                    SchemaAdapter._clean_schema_internal(item) if isinstance(item, dict) else item 
-                    for item in value
-                ]
-            else:
-                cleaned[key] = value
-
-        # Second pass: validate required properties exist in properties
-        if "properties" in cleaned:
-            properties = cleaned.get("properties", {})
-            required_props = []
+        Args:
+            text: The text to extract answer from
             
-            # Get required properties from schema
-            schema_required = cleaned.get("required", [])
-            
-            # Add properties that are required and exist
-            for prop_name in schema_required:
-                if prop_name in properties:
-                    required_props.append(prop_name)
-                else:
-                    logger.warning(f"Required property '{prop_name}' not found in properties")
-            
-            if required_props:
-                cleaned["required"] = required_props
-                logger.debug(f"Final required properties: {required_props}")
-                
-        return cleaned
-
-
+        Returns:
+            The extracted answer or original text if no answer tags found
+        """
+        match = re.search(r'<answer>(.*?)</answer>', text, re.DOTALL)
+        return match.group(1).strip() if match else text
+    
     def convert_mcp_tools_to_anthropic(self, tools: List[MCPTool]) -> List[Dict[str, Any]]:
         """Convert MCP tools to Anthropic format."""
         logger.debug("TEST LOG - Starting tool conversion")
@@ -117,6 +70,32 @@ class SchemaAdapter:
         
         logger.debug(f"Converted {len(formatted_tools)} tools successfully")
         return formatted_tools
+    
+    def clean_schema(self, schema: Dict[str, Any]) -> Dict[str, Any]:
+        """Clean a JSON schema for Anthropic compatibility."""
+        return self._clean_schema_internal(schema)
+    
+    def _clean_schema_internal(self, schema: Dict[str, Any]) -> Dict[str, Any]:
+        """Internal method for recursively cleaning schema."""
+        cleaned = {}
+        
+        # Copy allowed fields
+        for key in ["type", "properties", "required", "items", "enum", "description"]:
+            if key in schema:
+                cleaned[key] = schema[key]
+        
+        # Recursively clean nested properties
+        if "properties" in cleaned:
+            cleaned_props = {}
+            for prop_name, prop_schema in cleaned["properties"].items():
+                cleaned_props[prop_name] = self._clean_schema_internal(prop_schema)
+            cleaned["properties"] = cleaned_props
+            
+        # Recursively clean array items
+        if "items" in cleaned:
+            cleaned["items"] = self._clean_schema_internal(cleaned["items"])
+            
+        return cleaned
 
     @staticmethod
     def create_user_message(query: str) -> MessageParam:
@@ -157,7 +136,7 @@ class SchemaAdapter:
         return msg
 
     @staticmethod
-    def extract_tool_calls(response: Message) -> List[tuple[str, Dict[str, Any]]]:
+    def extract_tool_calls(response: Message) -> List[Tuple[str, Dict[str, Any]]]:
         """Extract tool calls from an Anthropic message."""
         tool_calls = []
         
@@ -169,7 +148,7 @@ class SchemaAdapter:
                     logger.debug(f"Found tool_use block: {json.dumps(block.dict(), indent=2)}")
                     tool_calls.append((
                         block.name,
-                        block.parameters
+                        block.input
                     ))
         
         logger.debug(f"Extracted {len(tool_calls)} tool calls")
