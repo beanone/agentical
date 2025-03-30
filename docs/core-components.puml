@@ -8,23 +8,37 @@ package "MCP Layer" {
 }
 
 package "LLM Layer" {
-    [LLMBackend]
+    interface "LLMBackend" as LLMBackend
     [GeminiBackend] as Gemini
     [OpenAIBackend] as OpenAI
-    [AnthropicBackend] as Anthropic
-    LLMBackend --> Gemini
-    LLMBackend --> OpenAI
-    LLMBackend --> Anthropic
+    
+    package "Anthropic Implementation" {
+        [AnthropicBackend] as Anthropic
+        [SchemaAdapter] as Adapter
+        Anthropic ..> Adapter : uses
+    }
+    
+    Gemini .up.|> LLMBackend : implements
+    OpenAI .up.|> LLMBackend : implements
+    Anthropic .up.|> LLMBackend : implements
 }
 
 package "Integration Layer" {
     [MCPToolProvider] as Provider
     Provider --> MCP
-    Provider --> LLMBackend
+    Provider -right-> LLMBackend
 }
 
 package "Tool Layer" {
     [MCP Tools] as Tools
     Session --> Tools
 }
+
+note right of Adapter
+  Handles conversion between
+  MCP and Anthropic formats:
+  - Tool schemas
+  - Messages
+  - Tool calls
+end note
 @enduml 
