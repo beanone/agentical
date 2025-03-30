@@ -1,12 +1,5 @@
-aiohttp
-pydantic
-openai
-anthropic
-pydantic-settings
-python-dotenv
-
-pytest
-pytest-cov
-pytest-asyncio
-pytest-mock
-pytest-mock
+google-cloud-aiplatform>=1.36.0
+python-dotenv>=1.0.0
+google-generativeai>=0.3.0
+google-genai>=0.2.0
+mcp>=0.1.0 

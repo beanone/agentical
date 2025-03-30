@@ -1,0 +1,30 @@
+@startuml
+package "MCP Layer" {
+    [MCPClient] as MCP
+    [MCPSession] as Session
+    [MCPConfig] as Config
+    MCP --> Session
+    MCP --> Config
+}
+
+package "LLM Layer" {
+    [LLMBackend]
+    [GeminiBackend] as Gemini
+    [OpenAIBackend] as OpenAI
+    [AnthropicBackend] as Anthropic
+    LLMBackend --> Gemini
+    LLMBackend --> OpenAI
+    LLMBackend --> Anthropic
+}
+
+package "Integration Layer" {
+    [MCPToolProvider] as Provider
+    Provider --> MCP
+    Provider --> LLMBackend
+}
+
+package "Tool Layer" {
+    [MCP Tools] as Tools
+    Session --> Tools
+}
+@enduml 

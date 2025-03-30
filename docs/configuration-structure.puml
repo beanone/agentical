@@ -1,0 +1,20 @@
+@startuml
+class MCPConfig {
+    +Dict<str,MCPServerConfig> servers
+    +str default_server
+}
+
+class MCPServerConfig {
+    +str command
+    +List<str> args
+    +Dict<str,str> env
+    +str working_dir
+}
+
+class LLMConfig {
+    +str provider
+    +Dict<str,any> config
+}
+
+MCPConfig --> MCPServerConfig
+@enduml 
