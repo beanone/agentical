@@ -4,7 +4,6 @@ __pycache__/
 *$py.class
 *.so
 .Python
-_version.py
 build/
 develop-eggs/
 dist/
@@ -23,11 +22,9 @@ wheels/
 MANIFEST
 
 # Virtual Environments
-.cursor
 .env
 .venv
 .config.json
-docs/discovery/
 env/
 venv/
 ENV/
