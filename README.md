@@ -215,7 +215,8 @@ For a more detailed view of the system architecture and component relationships,
 ### Key Components
 
 - **MCPToolProvider**: MCP interactions
-  - Handles server selection and connection
+  - Load MCP servers from configuration (Discovery based can be implemented later)
+  - Handles server connection
   - Manages resource lifecycle with AsyncExitStack
   - Provides clean error handling and validation
 
