@@ -27,6 +27,7 @@ MANIFEST
 .env
 .venv
 .config.json
+docs/discovery/
 env/
 venv/
 ENV/
