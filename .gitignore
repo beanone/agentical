@@ -28,6 +28,7 @@ MANIFEST
 env/
 venv/
 ENV/
+output/
 env.bak/
 venv.bak/
 .python-version
