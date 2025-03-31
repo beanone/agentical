@@ -97,7 +97,8 @@ Example queries using multiple tools:
 The LLM will automatically select the appropriate tool based on the query when multiple servers are connected.
 
 5. Choose and use your LLM backend:
-   ```python
+
+  ```python
   import asyncio
   import agentical.chat_client as chat_client
 
@@ -110,7 +111,7 @@ The LLM will automatically select the appropriate tool based on the query when m
 
   if __name__ == "__main__":
       asyncio.run(main()) 
-   ```
+  ```
 
 ## Multiple MCP Server Usage
 
