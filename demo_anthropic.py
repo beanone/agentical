@@ -3,7 +3,7 @@
 import asyncio
 import agentical.chat_client as chat_client
 
-from anthropic_backend.anthropic_chat import AnthropicBackend
+from agentical.anthropic_backend.anthropic_chat import AnthropicBackend
 
 
 async def main():
