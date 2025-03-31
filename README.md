@@ -19,17 +19,14 @@ A robust Python framework for integrating Large Language Models (LLMs) with tool
 ### Installation
 
 ```bash
-# Install from PyPI
-pip install beanone-agentical
-
 # Create and activate virtual environment
 python -m venv .venv
 source .venv/bin/activate  # Linux/Mac
 # or
 .venv\Scripts\activate  # Windows
 
-# Install dependencies
-pip install -r requirements.txt
+# Install from PyPI
+pip install beanone-agentical
 ```
 
 ### Basic Usage
@@ -90,58 +87,29 @@ pip install -r requirements.txt
 Example queries using multiple tools:
 ```python
 # Using filesystem and weather tools together
-response = await provider.process_query(
     "Read the contents of config.json and tell me if it has a weather API key configured. "
     "If yes, what's the current weather in that location?"
-)
 
 # Using terminal and filesystem tools together
-response = await provider.process_query(
     "List all Python files in the current directory and show me the contents of any file that imports 'asyncio'"
-)
 ```
 
 The LLM will automatically select the appropriate tool based on the query when multiple servers are connected.
 
 5. Choose and use your LLM backend:
    ```python
-   # Choose ONE backend to import:
-   from openai_backend.openai_chat import OpenAIBackend    # For OpenAI
-   # or
-   from gemini_backend.gemini_chat import GeminiBackend    # For Gemini
-   
-   from agentical.mcp import MCPToolProvider
-   from typing import Dict, Any
-   from mcp.types import CallToolResult
-   
-   async def main():
-       try:
-           # Initialize your chosen backend
-           llm_backend = OpenAIBackend()    # If using OpenAI
-           # or
-           # llm_backend = GeminiBackend()  # If using Gemini
-           
-           provider = MCPToolProvider(llm_backend=llm_backend)
-           
-           # Load MCP server configuration
-           provider.available_servers = MCPToolProvider.load_mcp_config("config.json")
-           
-           # Connect to server(s) with interactive selection
-           await provider.interactive_server_selection()
-           
-           # Process queries
-           response = await provider.process_query("What files are in the current directory?")
-           print(response)
-           
-       except Exception as e:
-           print(f"Error: {str(e)}")
-       finally:
-           # Ensure proper cleanup
-           await provider.cleanup()
-   
-   if __name__ == "__main__":
-       import asyncio
-       asyncio.run(main())
+  import asyncio
+  import agentical.chat_client as chat_client
+
+  from agentical.gemini_backend.gemini_chat import GeminiBackend
+
+
+  async def main():
+      await chat_client.run_demo(GeminiBackend())
+
+
+  if __name__ == "__main__":
+      asyncio.run(main()) 
    ```
 
 ## Multiple MCP Server Usage
@@ -260,35 +228,6 @@ For a more detailed view of the system architecture and component relationships,
   - Resource cleanup guarantees
   - Error handling
 
-## Configuration
-
-The framework connects to MCP-compliant servers, which are configured through a JSON-based configuration system. Each server entry specifies how to launch an MCP-compliant server:
-
-```json
-{
-    "terminal-server": {
-        "command": "python",
-        "args": ["server/terminal_server.py"],
-        "env": {
-            "WORKSPACE_DIR": "/path/to/workspace"
-        }
-    },
-    "filesystem-server": {
-        "command": "python",
-        "args": ["server/fs_server.py"],
-        "env": {
-            "WORKSPACE_DIR": "/path/to/workspace"
-        }
-    },
-    "weather-server": {
-        "command": "python",
-        "args": ["server/weather_server.py"],
-        "env": {
-            "OPENWEATHERMAP_API_KEY": "your-api-key-here"
-        }
-    }
-}
-```
 
 ### Available MCP Servers
 
@@ -325,7 +264,7 @@ The framework includes several example MCP servers to demonstrate how easily new
   response = await provider.process_query("What's the temperature in New York in Fahrenheit?")
   ```
 
-#### External MCP Servers
+#### Test MCP Servers
 
 The framework can integrate with any MCP-compliant server without modification. The examples below demonstrate how to configure popular external MCP servers that can be used as-is, requiring only configuration changes in your `config.json`:
 
@@ -434,25 +373,6 @@ pip install -e .
 # Install development dependencies
 pip install -r requirements-dev.txt
 ```
-
-### Running Tests
-
-```bash
-# Run all tests
-pytest
-
-# Run specific test file
-pytest tests/test_provider.py
-
-# Run example scripts
-python demo_openai.py  # For OpenAI backend
-python demo_gemini.py  # For Gemini backend
-
-# Run with custom configuration
-python demo_openai.py -c custom_config.json
-```
-
-Note: The `PYTHONPATH=src` is required to ensure Python can find the package modules correctly.
 
 ### Implementing New LLM Backends
 
