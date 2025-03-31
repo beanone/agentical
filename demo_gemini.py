@@ -3,7 +3,7 @@
 import asyncio
 import agentical.chat_client as chat_client
 
-from gemini_backend.gemini_chat import GeminiBackend
+from agentical.gemini_backend.gemini_chat import GeminiBackend
 
 
 async def main():
