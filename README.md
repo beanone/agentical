@@ -331,10 +331,15 @@ pytest
 # Run specific test file
 pytest tests/test_provider.py
 
-# Run interactive tests
-python test_openai.py  # For OpenAI backend
-python test_gemini.py  # For Gemini backend
+# Run example scripts
+PYTHONPATH=src python test_openai.py  # For OpenAI backend
+PYTHONPATH=src python test_gemini.py  # For Gemini backend
+
+# Run with custom configuration
+PYTHONPATH=src python test_openai.py -c custom_config.json
 ```
+
+Note: The `PYTHONPATH=src` is required to ensure Python can find the package modules correctly.
 
 ### Implementing New LLM Backends
 
