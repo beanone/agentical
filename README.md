@@ -74,10 +74,10 @@ pip install -r requirements.txt
 3. Run the example:
    ```bash
    # Run with OpenAI backend
-   PYTHONPATH=src python demo_openai.py
+   python demo_openai.py
    
    # Or with custom configuration
-   PYTHONPATH=src python demo_openai.py -c custom_config.json
+   python demo_openai.py -c custom_config.json
    ```
 
 4. When prompted, you can:
@@ -439,11 +439,11 @@ pytest
 pytest tests/test_provider.py
 
 # Run example scripts
-PYTHONPATH=src python demo_openai.py  # For OpenAI backend
-PYTHONPATH=src python demo_gemini.py  # For Gemini backend
+python demo_openai.py  # For OpenAI backend
+python demo_gemini.py  # For Gemini backend
 
 # Run with custom configuration
-PYTHONPATH=src python demo_openai.py -c custom_config.json
+python demo_openai.py -c custom_config.json
 ```
 
 Note: The `PYTHONPATH=src` is required to ensure Python can find the package modules correctly.
