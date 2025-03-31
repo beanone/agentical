@@ -141,6 +141,81 @@ The LLM will automatically select the appropriate tool based on the query when m
        asyncio.run(main())
    ```
 
+## Multiple MCP Server Usage
+
+The framework supports connecting to multiple MCP servers simultaneously, allowing you to combine tools from different servers in a single query. This enables powerful cross-tool functionality and complex operations.
+
+### Connecting to Multiple Servers
+
+When running the demo, you'll see an option to "Connect to all servers":
+
+```
+Available MCP servers:
+1. terminal-server
+2. filesystem-server
+3. weather-server
+4. github-server
+5. brave-search
+6. All above servers
+```
+
+Selecting "All above servers" will:
+- Connect to all available servers concurrently
+- Make all tools from every server available
+- Allow using tools from different servers in a single query
+
+### Example Multi-Server Queries
+
+Here are some example queries that demonstrate the power of combining multiple servers:
+
+1. **Weather Comparison Across Cities**:
+   ```
+   "Show me the temperature difference between Seattle and Beijing now"
+   ```
+   This query uses the weather server to:
+   - Get current weather in Seattle
+   - Get current weather in Beijing
+   - Calculate and display the temperature difference
+
+2. **Research and Local Storage**:
+   ```
+   "Search for Python async best practices and save them to a local markdown file"
+   ```
+   This query combines:
+   - Brave Search server for research
+   - File system server for saving results
+
+3. **Weather-Aware GitHub Analysis**:
+   ```
+   "Find active Python projects on GitHub from developers in cities where it's currently sunny"
+   ```
+   This query uses:
+   - GitHub server for project search
+   - Weather server for city conditions
+   - Brave Search for additional context
+
+4. **System Analysis with Documentation**:
+   ```
+   "Check system memory usage and create a GitHub issue if it's above 80%"
+   ```
+   This combines:
+   - Terminal server for system checks
+   - GitHub server for issue creation
+
+### Benefits of Multi-Server Usage
+
+1. **Cross-Tool Integration**: Seamlessly combine functionality from different tools
+2. **Complex Workflows**: Create sophisticated automation pipelines
+3. **Context Enrichment**: Add environmental context to operations
+4. **Flexible Tool Selection**: LLM automatically chooses the right tools for each task
+
+### Best Practices
+
+1. **Clear Intent**: Make queries clear about which tools should be used
+2. **Explicit Requirements**: Specify exact requirements for multi-tool operations
+3. **Error Handling**: Be prepared for some servers to be unavailable
+4. **Resource Management**: Consider the impact of using multiple servers simultaneously
+
 ## Architecture
 
 The framework follows a clean, layered architecture with compile-time LLM backend selection:
