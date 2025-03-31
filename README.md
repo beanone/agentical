@@ -245,7 +245,7 @@ For a more detailed view of the system architecture and component relationships,
 
 ### Key Components
 
-- **MCPToolProvider**: Main facade coordinating LLM and MCP interactions
+- **MCPToolProvider**: MCP interactions
   - Handles server selection and connection
   - Manages resource lifecycle with AsyncExitStack
   - Provides clean error handling and validation
@@ -255,7 +255,7 @@ For a more detailed view of the system architecture and component relationships,
   - Async query processing
   - Pluggable provider support
 
-- **MCPSession**: Handles MCP server connections
+- **Chat Client**: LLM Facade: a chat client with MCP server connections
   - Async tool execution
   - Resource cleanup guarantees
   - Error handling
