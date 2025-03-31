@@ -1,13 +1,13 @@
 """Test script for MCPToolProvider with Anthropic backend."""
 
 import asyncio
-import llm_demo
+import agentical.chat_client as chat_client
 
 from anthropic_backend.anthropic_chat import AnthropicBackend
 
 
 async def main():
-    await llm_demo.run_demo(AnthropicBackend())
+    await chat_client.run_demo(AnthropicBackend())
 
 
 if __name__ == "__main__":

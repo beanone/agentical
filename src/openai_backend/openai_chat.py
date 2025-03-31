@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, Callable
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletion
 
-from agentical.core.llm_backend import LLMBackend
+from agentical.api.llm_backend import LLMBackend
 from mcp.types import Tool as MCPTool
 from mcp.types import CallToolResult
 

@@ -74,10 +74,10 @@ pip install -r requirements.txt
 3. Run the example:
    ```bash
    # Run with OpenAI backend
-   PYTHONPATH=src python test_openai.py
+   PYTHONPATH=src python demo_openai.py
    
    # Or with custom configuration
-   PYTHONPATH=src python test_openai.py -c custom_config.json
+   PYTHONPATH=src python demo_openai.py -c custom_config.json
    ```
 
 4. When prompted, you can:
@@ -107,7 +107,7 @@ The LLM will automatically select the appropriate tool based on the query when m
    # or
    from gemini_backend.gemini_chat import GeminiBackend    # For Gemini
    
-   from agentical.integration.mcp import MCPToolProvider
+   from agentical.mcp import MCPToolProvider
    from typing import Dict, Any
    from mcp.types import CallToolResult
    
@@ -221,14 +221,18 @@ Here are some example queries that demonstrate the power of combining multiple s
 The framework follows a clean, layered architecture with compile-time LLM backend selection:
 
 ```
-┌─────────────────┐
-│  Integration    │ MCPToolProvider coordinates between layers
-├─────────────────┤
-│    LLM Layer    │ Backend chosen at compile time (OpenAI/Gemini)
-├─────────────────┤
-│    MCP Layer    │ Standard MCP protocol implementation
-├─────────────────┤
-│   Tool Layer    │ External tools and data sources
+┌─────────────────┐    agentical/
+│    API Layer    │    ├── api/                   # Core abstractions & interfaces
+│                 │    │   └── llm_backend.py     # LLM abstraction layer
+├─────────────────┤    │
+│ MCP Integration │    ├── mcp/                   # MCP protocol integration
+│                 │    │   └── provider.py        # Tool provider implementation
+├─────────────────┤    │
+│     Client      │    ├── chat_client.py         # Generic LLM client implementation
+│ Implementation  │    │
+│                 │    ├── anthropic_backend/     # Anthropic implementation
+│                 │    ├── gemini_backend/        # Gemini implementation
+│                 │    └── openai_backend/        # OpenAI implementation
 └─────────────────┘
 ```
 
@@ -435,11 +439,11 @@ pytest
 pytest tests/test_provider.py
 
 # Run example scripts
-PYTHONPATH=src python test_openai.py  # For OpenAI backend
-PYTHONPATH=src python test_gemini.py  # For Gemini backend
+PYTHONPATH=src python demo_openai.py  # For OpenAI backend
+PYTHONPATH=src python demo_gemini.py  # For Gemini backend
 
 # Run with custom configuration
-PYTHONPATH=src python test_openai.py -c custom_config.json
+PYTHONPATH=src python demo_openai.py -c custom_config.json
 ```
 
 Note: The `PYTHONPATH=src` is required to ensure Python can find the package modules correctly.

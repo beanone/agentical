@@ -8,8 +8,8 @@ import argparse
 
 from dotenv import load_dotenv
 
-from agentical.core.llm_backend import LLMBackend
-from agentical.integration.mcp.provider import MCPToolProvider
+from agentical.api.llm_backend import LLMBackend
+from agentical.mcp.provider import MCPToolProvider
 
 # Load environment variables (including GEMINI_API_KEY)
 load_dotenv()
