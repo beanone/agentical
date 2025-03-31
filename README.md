@@ -257,14 +257,6 @@ The framework includes several example MCP servers to demonstrate how easily new
 - **Tool**: `get_weather`
 - **Configuration**:
   - `OPENWEATHERMAP_API_KEY`: Required, your OpenWeatherMap API key
-- **Usage Example**:
-  ```python
-  # Get weather in Celsius (metric)
-  response = await provider.process_query("What's the weather in London?")
-  
-  # Get weather in Fahrenheit (imperial)
-  response = await provider.process_query("What's the temperature in New York in Fahrenheit?")
-  ```
 
 #### Test MCP Servers
 
