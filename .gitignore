@@ -23,6 +23,7 @@ wheels/
 MANIFEST
 
 # Virtual Environments
+.cursor
 .env
 .venv
 .config.json
