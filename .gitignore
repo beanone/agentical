@@ -25,6 +25,7 @@ MANIFEST
 .env
 .venv
 .config.json
+.cursor
 env/
 venv/
 ENV/
