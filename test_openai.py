@@ -24,6 +24,11 @@ def parse_arguments():
         default='config.json',
         help='Path to MCP configuration file (default: config.json)'
     )
+    parser.add_argument(
+        '--interactive', '-i',
+        action='store_true',
+        help='Use interactive server selection mode (default: connect to all servers)'
+    )
     return parser.parse_args()
 
 
@@ -57,10 +62,10 @@ async def main():
         print("Example: python test_mcp_provider.py --config my_config.json")
         sys.exit(1)
         
-    # Initialize the Gemini backend
+    # Initialize the OpenAI backend
     llm_backend = OpenAIBackend()
     
-    # Initialize provider with the Gemini backend
+    # Initialize provider with the OpenAI backend
     provider = MCPToolProvider(llm_backend=llm_backend)
     
     try:
@@ -69,11 +74,11 @@ async def main():
         provider.available_servers = provider.load_mcp_config(config_path)
         print(f"Loaded {len(provider.available_servers)} servers")
         
-        # Let user select server
-        selected_server = await provider.interactive_server_selection()
-        
-        # Connect to selected server
-        await provider.mcp_connect(selected_server)
+        # Connect to servers based on mode
+        if args.interactive:
+            await provider.interactive_server_selection()
+        else:
+            await provider.connect()
         
         # Start chat loop
         await chat_loop(provider)

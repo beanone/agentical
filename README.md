@@ -71,7 +71,36 @@ pip install -r requirements.txt
    }
    ```
 
-3. Choose and use your LLM backend:
+3. Run the example:
+   ```bash
+   # Run with OpenAI backend
+   PYTHONPATH=src python test_openai.py
+   
+   # Or with custom configuration
+   PYTHONPATH=src python test_openai.py -c custom_config.json
+   ```
+
+4. When prompted, you can:
+   - Select a specific MCP server to use its tools
+   - Choose "Connect to all servers" to let the LLM use tools from any available server
+
+Example queries using multiple tools:
+```python
+# Using filesystem and weather tools together
+response = await provider.process_query(
+    "Read the contents of config.json and tell me if it has a weather API key configured. "
+    "If yes, what's the current weather in that location?"
+)
+
+# Using terminal and filesystem tools together
+response = await provider.process_query(
+    "List all Python files in the current directory and show me the contents of any file that imports 'asyncio'"
+)
+```
+
+The LLM will automatically select the appropriate tool based on the query when multiple servers are connected.
+
+5. Choose and use your LLM backend:
    ```python
    # Choose ONE backend to import:
    from openai_backend.openai_chat import OpenAIBackend    # For OpenAI
@@ -94,9 +123,8 @@ pip install -r requirements.txt
            # Load MCP server configuration
            provider.available_servers = MCPToolProvider.load_mcp_config("config.json")
            
-           # Connect to server (with interactive selection)
-           server_name = await provider.interactive_server_selection()
-           await provider.mcp_connect(server_name)
+           # Connect to server(s) with interactive selection
+           await provider.interactive_server_selection()
            
            # Process queries
            response = await provider.process_query("What files are in the current directory?")
