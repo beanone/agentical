@@ -221,7 +221,7 @@ Here are some example queries that demonstrate the power of combining multiple s
 
 ## Architecture
 
-The framework follows a clean, layered architecture with compile-time LLM backend selection:
+The framework follows a clean, layered architecture:
 
 ```
 ┌─────────────────┐    agentical/
