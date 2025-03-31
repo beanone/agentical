@@ -7,7 +7,7 @@ requires = [
 build-backend = "hatchling.build"
 
 [project]
-name = "agentical"
+name = "beanone-agentical"
 dynamic = ["version"]  # Use git tags for versioning
 description = "MCP-Compliant LLM Integration Framework"
 readme = "README.md"
@@ -15,7 +15,7 @@ requires-python = ">=3.10"
 license = "MIT"
 keywords = ["llm", "mcp", "ai", "tools", "integration"]
 authors = [
-    { name = "Agentical Team", email = "agentical@example.com" }  # Update with real info
+    { name = "Beanone Team", email = "beanone@example.com" }  # Update with real info
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",  # Change to Alpha for initial release
@@ -60,7 +60,7 @@ Issues = "https://github.com/agentical/agentical/issues"
 
 [tool.hatch.version]
 source = "vcs"
-raw-options = { version_scheme = "post-release" }
+raw-options = { local_scheme = "no-local-version" }
 
 [tool.hatch.build.hooks.vcs]
 version-file = "agentical/_version.py"

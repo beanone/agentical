@@ -19,6 +19,9 @@ A robust Python framework for integrating Large Language Models (LLMs) with tool
 ### Installation
 
 ```bash
+# Install from PyPI
+pip install beanone-agentical
+
 # Create and activate virtual environment
 python -m venv .venv
 source .venv/bin/activate  # Linux/Mac
@@ -424,6 +427,9 @@ cd agentical
 # Create and activate virtual environment
 python -m venv .venv
 source .venv/bin/activate
+
+# Install package in development mode
+pip install -e .
 
 # Install development dependencies
 pip install -r requirements-dev.txt
