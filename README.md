@@ -50,13 +50,23 @@ pip install -r requirements.txt
        "terminal-server": {
            "command": "python",
            "args": ["server/terminal_server.py"],
-           "env": {  // Optional environment variables
+           "env": {
                "WORKSPACE_DIR": "/path/to/workspace"
            }
        },
-       "knowledge-graph": {
-           "command": "npx",
-           "args": ["-y", "@beanone/knowledge-graph"]
+       "filesystem-server": {
+           "command": "python",
+           "args": ["server/fs_server.py"],
+           "env": {
+               "WORKSPACE_DIR": "/path/to/workspace"
+           }
+       },
+       "weather-server": {
+           "command": "python",
+           "args": ["server/weather_server.py"],
+           "env": {
+               "OPENWEATHERMAP_API_KEY": "your-api-key-here"
+           }
        }
    }
    ```
@@ -148,18 +158,111 @@ The framework connects to MCP-compliant servers, which are configured through a 
 {
     "terminal-server": {
         "command": "python",
-        "args": ["server/terminal_server.py"],  // Launches an MCP-compliant terminal server
-        "env": {  // Optional environment variables
+        "args": ["server/terminal_server.py"],
+        "env": {
             "WORKSPACE_DIR": "/path/to/workspace"
         }
     },
-    "knowledge-graph": {
-        "command": "npx",
-        "args": ["-y", "@beanone/knowledge-graph"],  // Another MCP-compliant server
-        "working_dir": "/path/to/workspace"  // Optional working directory
+    "filesystem-server": {
+        "command": "python",
+        "args": ["server/fs_server.py"],
+        "env": {
+            "WORKSPACE_DIR": "/path/to/workspace"
+        }
+    },
+    "weather-server": {
+        "command": "python",
+        "args": ["server/weather_server.py"],
+        "env": {
+            "OPENWEATHERMAP_API_KEY": "your-api-key-here"
+        }
     }
 }
 ```
+
+### Available MCP Servers
+
+The framework includes several example MCP servers to demonstrate how easily new MCP-compliant tools can be developed. These serve as both useful tools and reference implementations for creating your own MCP servers.
+
+#### Built-in Servers
+
+#### Terminal Server
+- **Purpose**: Execute shell commands in a controlled workspace
+- **Tool**: `run_command`
+- **Configuration**: 
+  - `WORKSPACE_DIR`: Optional, defaults to `~/mcp/workspace`
+
+#### Filesystem Server
+- **Purpose**: Safe, cross-platform file operations
+- **Tools**:
+  - `read_file`: Read contents of a file
+  - `write_file`: Write content to a file
+  - `list_directory`: List contents of a directory
+- **Configuration**:
+  - `WORKSPACE_DIR`: Optional, defaults to `~/mcp/workspace`
+
+#### Weather Server
+- **Purpose**: Fetch current weather information
+- **Tool**: `get_weather`
+- **Configuration**:
+  - `OPENWEATHERMAP_API_KEY`: Required, your OpenWeatherMap API key
+- **Usage Example**:
+  ```python
+  # Get weather in Celsius (metric)
+  response = await provider.process_query("What's the weather in London?")
+  
+  # Get weather in Fahrenheit (imperial)
+  response = await provider.process_query("What's the temperature in New York in Fahrenheit?")
+  ```
+
+#### External MCP Servers
+
+The framework can integrate with any MCP-compliant server without modification. The examples below demonstrate how to configure popular external MCP servers that can be used as-is, requiring only configuration changes in your `config.json`:
+
+#### Knowledge Graph Server
+```json
+{
+    "knowledge-graph": {
+        "command": "npx",
+        "args": ["-y", "@beanone/knowledge-graph"],
+        "env": {
+            "WORKSPACE_DIR": "/path/to/workspace"  // Optional
+        }
+    }
+}
+```
+
+#### Brave Search Server
+```json
+{
+    "brave-search": {
+        "command": "npx",
+        "args": ["-y", "@beanone/brave-search"],
+        "env": {
+            "BRAVE_API_KEY": "your-api-key-here"  // Required
+        }
+    }
+}
+```
+
+#### Memory Server
+```json
+{
+    "memory": {
+        "command": "npx",
+        "args": ["-y", "@beanone/memory"],
+        "env": {
+            "MEMORY_STORE_PATH": "/path/to/store"  // Optional
+        }
+    }
+}
+```
+
+To integrate external servers:
+1. Install the required packages (if using npm packages, ensure Node.js is installed)
+2. Add the server configuration to your `config.json`
+3. Set any required environment variables
+4. The servers will be automatically available through the `MCPToolProvider`
 
 Each server in the configuration must implement the Model Context Protocol. The configuration specifies:
 - `command`: The command to launch the MCP server

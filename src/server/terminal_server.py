@@ -4,6 +4,7 @@ from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("terminal")
 DEFAULT_WORKSPACE = os.path.expanduser("~/mcp/workspace")
+WORKSPACE_DIR = os.getenv("WORKSPACE_DIR", DEFAULT_WORKSPACE)
 
 @mcp.tool()
 async def run_command(command: str) -> str:
@@ -20,7 +21,7 @@ async def run_command(command: str) -> str:
         The command output or an error message.
     """
     try:
-        result = subprocess.run(command, shell=True, cwd=DEFAULT_WORKSPACE, capture_output=True, text=True)
+        result = subprocess.run(command, shell=True, cwd=WORKSPACE_DIR, capture_output=True, text=True)
         return result.stdout or result.stderr
     except Exception as e:
         return str(e)
