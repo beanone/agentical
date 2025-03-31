@@ -1,0 +1,97 @@
+[build-system]
+requires = [
+    "hatchling>=1.18.0",
+    "hatch-vcs>=0.3.0",  # For git-based versioning
+    "hatch-fancy-pypi-readme>=23.1.0",
+]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentical"
+dynamic = ["version"]  # Use git tags for versioning
+description = "MCP-Compliant LLM Integration Framework"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+keywords = ["llm", "mcp", "ai", "tools", "integration"]
+authors = [
+    { name = "Agentical Team", email = "agentical@example.com" }  # Update with real info
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",  # Change to Alpha for initial release
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "mcp>=0.1.0",
+    "python-dotenv>=1.0.0",
+    "aiohttp>=3.0.0",
+    "pydantic>=2.0.0",
+    "openai>=1.0.0",
+    "google-generativeai>=0.3.0",
+    "google-genai>=0.2.0",
+    "google-cloud-aiplatform>=1.36.0",
+    "anthropic>=0.3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+    "types-aiohttp>=3.8.0",
+    "build>=1.0.0",
+    "twine>=4.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/agentical/agentical"
+Documentation = "https://github.com/agentical/agentical#readme"
+Repository = "https://github.com/agentical/agentical.git"
+Issues = "https://github.com/agentical/agentical/issues"
+
+[tool.hatch.version]
+source = "vcs"
+raw-options = { version_scheme = "post-release" }
+
+[tool.hatch.build.hooks.vcs]
+version-file = "agentical/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["agentical"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --cov=agentical --cov-report=term-missing"
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+include = '\.pyi?$'
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+select = ["E", "F", "B", "I", "N", "UP", "PL", "RUF"]
+ignore = []
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["google.*", "anthropic.*"]
+ignore_missing_imports = true 
