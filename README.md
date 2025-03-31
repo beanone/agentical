@@ -225,7 +225,7 @@ For a more detailed view of the system architecture and component relationships,
   - Async query processing
   - Pluggable provider support
 
-- **Chat Client**: LLM Facade: a chat client with MCP server connections
+- **chat_c_lient**: A Facade that encapsulates the integration of LLM with MCPToolProvider
   - Async tool execution
   - Resource cleanup guarantees
   - Error handling
