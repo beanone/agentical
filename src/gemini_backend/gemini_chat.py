@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Callable
 from google import genai
 from google.genai.types import Content
 
-from agentical.core.llm_backend import LLMBackend
+from agentical.api.llm_backend import LLMBackend
 from mcp.types import Tool as MCPTool
 from mcp.types import CallToolResult
 

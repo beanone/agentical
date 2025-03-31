@@ -1,13 +1,13 @@
 """Test script for MCPToolProvider, mirroring client.py functionality."""
 
 import asyncio
-import llm_demo
+import agentical.chat_client as chat_client
 
 from gemini_backend.gemini_chat import GeminiBackend
 
 
 async def main():
-    await llm_demo.run_demo(GeminiBackend())
+    await chat_client.run_demo(GeminiBackend())
 
 
 if __name__ == "__main__":

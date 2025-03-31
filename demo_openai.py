@@ -1,12 +1,12 @@
 """Test script for MCPToolProvider, mirroring client.py functionality."""
 
 import asyncio
-import llm_demo
+import agentical.chat_client as chat_client
 
 from openai_backend.openai_chat import OpenAIBackend
 
 async def main():
-    await llm_demo.run_demo(OpenAIBackend())
+    await chat_client.run_demo(OpenAIBackend())
 
 
 if __name__ == "__main__":

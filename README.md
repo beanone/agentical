@@ -107,7 +107,7 @@ The LLM will automatically select the appropriate tool based on the query when m
    # or
    from gemini_backend.gemini_chat import GeminiBackend    # For Gemini
    
-   from agentical.integration.mcp import MCPToolProvider
+   from agentical.mcp import MCPToolProvider
    from typing import Dict, Any
    from mcp.types import CallToolResult
    

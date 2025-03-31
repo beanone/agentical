@@ -11,7 +11,7 @@ from mcp.client.stdio import stdio_client
 from mcp.types import Tool as MCPTool
 from mcp.types import CallToolResult
 
-from agentical.core import LLMBackend
+from agentical.api import LLMBackend
 
 
 class MCPToolProvider:
