@@ -208,7 +208,45 @@ The framework follows a clean, layered architecture:
 └─────────────────┘
 ```
 
-For a more detailed view of the system architecture and component relationships, see the [Component Diagram](docs/core-components.puml) ([View Image](docs/core-components.png)).
+Here is  a more detailed view of the system architecture and component relationships:
+
+```mermaid
+graph BT
+    subgraph MCP_Layer
+        MCP[MCPClient]
+        Session[MCPSession]
+        Config[MCPConfig]
+        MCP --> Session
+        MCP --> Config
+    end
+
+    subgraph LLM_Layer
+        LLMBackend["LLMBackend (Interface)"]:::interface
+        Adapter[SchemaAdapter]
+        
+        Gemini[GeminiBackend]
+        OpenAI[OpenAIBackend]
+        Anthropic[AnthropicBackend]
+        
+        Gemini --> LLMBackend
+        OpenAI --> LLMBackend
+        Anthropic --> LLMBackend
+        Anthropic -.- Adapter
+    end
+
+    subgraph Integration_Layer
+        Provider[MCPToolProvider]
+        Provider --> MCP
+        Provider --> LLMBackend
+    end
+
+    subgraph Tool_Layer
+        Tools[MCP Tools]
+        Session --> Tools
+    end
+
+    classDef interface fill:#e8f4f8,stroke:#333,stroke-width:2px;
+```
 
 ![Component Diagram](docs/core-components.png)
 
