@@ -7,41 +7,64 @@ The MCP Integration architecture provides a flexible way to connect LLM provider
 ## Core Components
 
 ```mermaid
-graph BT
+graph TD
+    subgraph Application_Layer[User Application Layer]
+        App[Your Application]
+        Chat[Chat Client]
+        App --> Chat
+        note1[Choose how to integrate:<br/>1. Use Chat Client<br/>2. Use Provider directly]
+        note1 -.-> App
+    end
+
+    subgraph Integration_Layer
+        Provider[MCPToolProvider]
+        Chat --> Provider
+    end
+
     subgraph MCP_Layer
         MCP[MCPClient]
         Session[MCPSession]
         Config[MCPConfig]
         MCP --> Session
         MCP --> Config
+        Provider --> MCP
     end
 
-    subgraph LLM_Layer
-        LLMBackend["LLMBackend (Interface)"]:::interface
+    subgraph LLM_Layer[LLM Layer - Choose Your Provider]
+        LLMBackend["LLMBackend (Interface)"]
         Adapter[SchemaAdapter]
         
         Gemini[GeminiBackend]
         OpenAI[OpenAIBackend]
         Anthropic[AnthropicBackend]
         
-        Gemini --> LLMBackend
-        OpenAI --> LLMBackend
-        Anthropic --> LLMBackend
-        Anthropic -.- Adapter
-    end
-
-    subgraph Integration_Layer
-        Provider[MCPToolProvider]
-        Provider --> MCP
+        LLMBackend --> Gemini
+        LLMBackend --> OpenAI
+        LLMBackend --> Anthropic
+        Adapter -.- Anthropic
         Provider --> LLMBackend
+        
+        note2[Different LLM implementations:<br/>- OpenAI GPT<br/>- Google Gemini<br/>- Anthropic Claude]
+        note2 -.-> LLMBackend
     end
 
-    subgraph Tool_Layer
+    subgraph Tool_Layer[Tool Layer - Add MCP Servers]
         Tools[MCP Tools]
         Session --> Tools
+        note3[Implement your own MCP Servers<br/>or use from public repos:<br/>- @glama.ai/mcp/servers<br/>- @smithery.ai<br/>- Custom implementations]
+        note3 -.-> Tools
     end
 
-    classDef interface fill:#e8f4f8,stroke:#333,stroke-width:2px;
+    classDef interface fill:#e8f4f8,stroke:#333,stroke-width:2px
+    classDef userLayer fill:#e6ffe6,stroke:#333,stroke-width:2px
+    classDef note fill:#fff0f0,stroke:#333,stroke-width:2px
+    classDef toolNote fill:#f0f0ff,stroke:#333,stroke-width:2px
+
+    class Application_Layer userLayer
+    class LLMBackend interface
+    class note1 note
+    class note2 note
+    class note3 toolNote
 ```
 
 ## Component Interactions
