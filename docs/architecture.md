@@ -83,7 +83,7 @@ graph TD
 
     click GlamaLink "https://glama.ai/mcp/servers" _blank
     click SmitheryLink "https://smithery.ai" _blank
-    click CustomTools "./server" _blank
+    click CustomTools "https://github.com/beanone/agentical/tree/main/server" _blank
 ```
 
 ## Component Interactions
