@@ -260,16 +260,16 @@ graph TD
         note3 -.-> Tools
     end
 
-    classDef interface fill:#e8f4f8,stroke:#333,stroke-width:2px
+    classDef interface fill:#e8f4f8,stroke:#333,stroke-width:2px,color:#224466
     classDef userLayer fill:#e6ffe6,stroke:#333,stroke-width:2px
-    classDef note fill:#fff0f0,stroke:#333,stroke-width:2px
-    classDef toolNote fill:#f0f0ff,stroke:#333,stroke-width:2px
+    classDef note fill:#ffd6d6,stroke:#662222,stroke-width:2px,color:#662222
+    classDef toolNote fill:#ffd6d6,stroke:#662222,stroke-width:2px,color:#662222
 
     class Application_Layer userLayer
     class LLMBackend interface
     class note1 note
     class note2 note
-    class note3 toolNote
+    class note3 note
 ```
 
 ### Key Components
