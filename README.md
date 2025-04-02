@@ -213,7 +213,7 @@ Here is  a more detailed view of the system architecture and component relations
 
 ```mermaid
 graph TD
-    subgraph Application_Layer[User Application Layer]
+    subgraph Application_Layer["USER APPLICATION LAYER"]
         App[Your Application]
         Chat[Chat Client]
         App --> Chat
@@ -256,20 +256,39 @@ graph TD
     subgraph Tool_Layer[Tool Layer - Add MCP Servers]
         Tools[MCP Tools]
         Session --> Tools
-        note3[Implement your own MCP Servers<br/>or use from public repos:<br/>- @glama.ai/mcp/servers<br/>- @smithery.ai<br/>- Custom implementations]
-        note3 -.-> Tools
+        GlamaLink["glama.ai/mcp/servers"]
+        SmitheryLink["smithery.ai"]
+        CustomTools["server/ (local implementations)"]
+        note3[Implement your own MCP Servers<br/>or use from public repos]
+        note3 -.-> GlamaLink
+        note3 -.-> SmitheryLink
+        note3 -.-> CustomTools
+        GlamaLink --> Tools
+        SmitheryLink --> Tools
+        CustomTools --> Tools
     end
 
-    classDef interface fill:#e8f4f8,stroke:#333,stroke-width:2px,color:#224466
-    classDef userLayer fill:#e6ffe6,stroke:#333,stroke-width:2px
+    classDef userLayer fill:#e6ffe6,stroke:#333,stroke-width:5px,color:#000,font-weight:900,font-size:18px
     classDef note fill:#ffd6d6,stroke:#662222,stroke-width:2px,color:#662222
-    classDef toolNote fill:#ffd6d6,stroke:#662222,stroke-width:2px,color:#662222
+    classDef implementation fill:#fffbe6,stroke:#333,stroke-width:2px,color:#664400,font-weight:bold
+    classDef link fill:#fffbe6,stroke:#333,stroke-width:2px,color:#664400,font-weight:bold
 
     class Application_Layer userLayer
     class LLMBackend interface
     class note1 note
     class note2 note
     class note3 note
+    class Gemini implementation
+    class OpenAI implementation
+    class Anthropic implementation
+    class Adapter implementation
+    class GlamaLink link
+    class SmitheryLink link
+    class CustomTools link
+
+    click GlamaLink "https://glama.ai/mcp/servers" _blank
+    click SmitheryLink "https://smithery.ai" _blank
+    click CustomTools "./server" _blank
 ```
 
 ### Key Components
