@@ -7,8 +7,8 @@ The MCP Integration architecture provides a flexible way to connect LLM provider
 ## Core Components
 
 ```mermaid
-graph TB
-    subgraph "MCP Layer"
+graph BT
+    subgraph MCP_Layer
         MCP[MCPClient]
         Session[MCPSession]
         Config[MCPConfig]
@@ -16,26 +16,32 @@ graph TB
         MCP --> Config
     end
 
-    subgraph "LLM Layer"
-        LLMBackend[LLMBackend]
+    subgraph LLM_Layer
+        LLMBackend["LLMBackend (Interface)"]:::interface
+        Adapter[SchemaAdapter]
+        
         Gemini[GeminiBackend]
         OpenAI[OpenAIBackend]
         Anthropic[AnthropicBackend]
-        LLMBackend --> Gemini
-        LLMBackend --> OpenAI
-        LLMBackend --> Anthropic
+        
+        Gemini --> LLMBackend
+        OpenAI --> LLMBackend
+        Anthropic --> LLMBackend
+        Anthropic -.- Adapter
     end
 
-    subgraph "Integration Layer"
+    subgraph Integration_Layer
         Provider[MCPToolProvider]
         Provider --> MCP
         Provider --> LLMBackend
     end
 
-    subgraph "Tool Layer"
+    subgraph Tool_Layer
         Tools[MCP Tools]
         Session --> Tools
     end
+
+    classDef interface fill:#e8f4f8,stroke:#333,stroke-width:2px;
 ```
 
 ## Component Interactions
