@@ -5,12 +5,16 @@ MCP server configurations from JSON files.
 """
 
 import json
+import logging
 from pathlib import Path
 from typing import Dict, List
 
 from pydantic import BaseModel, Field, field_validator
 from agentical.api.configurer import ConfigurationProvider
 
+
+# Configure module logger
+logger = logging.getLogger(__name__)
 
 class ServerConfig(BaseModel):
     """Pydantic model for server configuration validation.
@@ -69,10 +73,12 @@ class FileConfigProvider(ConfigurationProvider):
             ValueError: If the config_path is empty or None
         """
         if not config_path:
+            logger.error("Attempted to initialize with empty config_path")
             raise ValueError("Configuration path cannot be empty")
             
         self.config_path = Path(config_path)
         self._config_cache: Dict[str, dict] = {}
+        logger.info("Initialized FileConfigProvider with config path: %s", self.config_path)
         
     async def load_config(self) -> Dict[str, dict]:
         """Load and validate server configurations from the JSON file.
@@ -85,16 +91,27 @@ class FileConfigProvider(ConfigurationProvider):
             ValueError: If the configuration is invalid
             json.JSONDecodeError: If the file contains invalid JSON
         """
+        logger.debug("Attempting to load configuration from: %s", self.config_path)
+        
         if not self.config_path.exists():
+            logger.error("Configuration file not found: %s", self.config_path)
             raise FileNotFoundError(f"Configuration file not found: {self.config_path}")
             
-        with open(self.config_path) as f:
-            raw_config = json.load(f)
-            
-        # Validate using Pydantic model
-        config = MCPConfig.model_validate(raw_config).model_dump()["servers"]
-        self._config_cache = config
-        return config
+        try:
+            with open(self.config_path) as f:
+                raw_config = json.load(f)
+                
+            # Validate using Pydantic model
+            config = MCPConfig.model_validate(raw_config).model_dump()["servers"]
+            self._config_cache = config
+            logger.info("Successfully loaded and validated configuration with %d servers", len(config))
+            return config
+        except json.JSONDecodeError as e:
+            logger.error("Failed to parse JSON configuration: %s", e)
+            raise
+        except ValueError as e:
+            logger.error("Invalid configuration format: %s", e)
+            raise
         
     async def get_server_config(self, name: str) -> dict:
         """Get configuration for a specific server.
@@ -109,12 +126,17 @@ class FileConfigProvider(ConfigurationProvider):
             KeyError: If the server name is not found
             ValueError: If the configuration is invalid or not loaded
         """
+        logger.debug("Retrieving configuration for server: %s", name)
+        
         if not self._config_cache:
+            logger.info("Configuration not loaded, loading now")
             await self.load_config()
             
         if name not in self._config_cache:
+            logger.warning("Server '%s' not found in configuration", name)
             raise KeyError(f"Server '{name}' not found in configuration")
             
+        logger.debug("Successfully retrieved configuration for server: %s", name)
         return self._config_cache[name]
         
     async def list_available_servers(self) -> List[str]:
@@ -126,7 +148,12 @@ class FileConfigProvider(ConfigurationProvider):
         Raises:
             IOError: If the configuration cannot be accessed
         """
+        logger.debug("Listing available servers")
+        
         if not self._config_cache:
+            logger.info("Configuration not loaded, loading now")
             await self.load_config()
             
-        return list(self._config_cache.keys()) 
+        server_list = list(self._config_cache.keys())
+        logger.debug("Found %d available servers", len(server_list))
+        return server_list 
