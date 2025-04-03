@@ -1,39 +1,37 @@
 {
-    "servers": {
-	"weather-server": {
-    	    "command": "python",
-            "args": [
-                "server/weather_server.py"
-            ],
-            "env": {
-                "OPENWEATHERMAP_API_KEY": "<Your OPENWEATHERMAP_API_KEY>"
-            }
-        },
-        "fs-server": {
-            "command": "python",
-            "args": [
-                "server/fs_server.py"
-            ],
-            "env": {
-                "WORKSPACE_DIR": "/mnt/d/dev/agentical/output"
-            }
-        },
-        "terminal-server": {
-            "command": "python",
-            "args": [
-                "server/terminal_server.py"
-            ],
-            "env": {
-                "WORKSPACE_DIR": "/mnt/d/dev/agentical/output"
-            }
-        },
-        "memory": {
-            "command": "mcp-server-memory",
-            "args": [],
-            "env": {
-                "MEMORY_FILE_PATH": "/mnt/d/dev/agentical/experiment/data/custom/memory.json",
-                "DEBUG": "true"
-            }
-        }
-    }
+    "weather-server": {
+	    "command": "python",
+	    "args": [
+		"server/weather_server.py"
+	    ],
+	    "env": {
+		"OPENWEATHERMAP_API_KEY": "<Your OPENWEATHERMAP_API_KEY>"
+	    }
+	},
+	"fs-server": {
+	    "command": "python",
+	    "args": [
+		"server/fs_server.py"
+	    ],
+	    "env": {
+		"WORKSPACE_DIR": "/mnt/d/dev/agentical/output"
+	    }
+	},
+	"terminal-server": {
+	    "command": "python",
+	    "args": [
+		"server/terminal_server.py"
+	    ],
+	    "env": {
+		"WORKSPACE_DIR": "/mnt/d/dev/agentical/output"
+	    }
+	},
+	"memory": {
+	    "command": "mcp-server-memory",
+	    "args": [],
+	    "env": {
+		"MEMORY_FILE_PATH": "/mnt/d/dev/agentical/experiment/data/custom/memory.json",
+		"DEBUG": "true"
+	    }
+	}
 }
