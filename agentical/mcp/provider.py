@@ -7,8 +7,6 @@ from pathlib import Path
 from typing import Dict, Optional, List, Any, Tuple
 import backoff
 import time
-from dataclasses import dataclass
-from datetime import datetime
 
 from contextlib import AsyncExitStack
 from mcp import ClientSession, StdioServerParameters
@@ -17,19 +15,11 @@ from mcp.types import Tool as MCPTool
 from mcp.types import CallToolResult
 
 from agentical.api import LLMBackend
+from agentical.mcp.health import HealthMonitor, ServerReconnector, ServerCleanupHandler
 
 logger = logging.getLogger(__name__)
 
-@dataclass
-class ServerHealth:
-    """Track server connection health."""
-    last_heartbeat: float = 0.0
-    consecutive_failures: int = 0
-    is_connected: bool = False
-    reconnection_attempt: int = 0
-    last_error: Optional[str] = None
-
-class MCPToolProvider:
+class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
     """Main facade for integrating LLMs with MCP tools.
     
     This class follows the architecture diagram's Integration Layer, coordinating
@@ -64,8 +54,14 @@ class MCPToolProvider:
         self.llm_backend = llm_backend
         self.tools_by_server: Dict[str, List[MCPTool]] = {}
         self.all_tools: List[MCPTool] = []
-        self.server_health: Dict[str, ServerHealth] = {}
-        self._health_monitor_task: Optional[asyncio.Task] = None
+        
+        # Initialize health monitor
+        self.health_monitor = HealthMonitor(
+            heartbeat_interval=self.HEARTBEAT_INTERVAL,
+            max_heartbeat_miss=self.MAX_HEARTBEAT_MISS,
+            reconnector=self,
+            cleanup_handler=self
+        )
         logger.debug("MCPToolProvider initialized successfully")
         
     @staticmethod
@@ -111,51 +107,27 @@ class MCPToolProvider:
         logger.debug("Available servers: %s", servers)
         return servers
 
-    async def _monitor_server_health(self):
-        """Monitor server connections and attempt reconnection if needed."""
-        while True:
-            try:
-                current_time = time.time()
-                for server_name, health in self.server_health.items():
-                    if not health.is_connected:
-                        continue
-                        
-                    time_since_heartbeat = current_time - health.last_heartbeat
-                    if time_since_heartbeat > self.HEARTBEAT_INTERVAL:
-                        health.consecutive_failures += 1
-                        logger.warning(
-                            "Server %s missed heartbeat. Consecutive failures: %d",
-                            server_name, health.consecutive_failures
-                        )
-                        
-                        if health.consecutive_failures >= self.MAX_HEARTBEAT_MISS:
-                            logger.error("Server %s connection appears dead. Initiating reconnection.", server_name)
-                            health.is_connected = False
-                            await self._cleanup_server(server_name)
-                            
-                            # Attempt reconnection if this is a WebSocket server
-                            if (server_name == "server-sequential-thinking" or
-                                any("ws" in arg for arg in self.available_servers[server_name]["args"])):
-                                try:
-                                    await self._handle_websocket_server(server_name, self.available_servers[server_name])
-                                    health.consecutive_failures = 0
-                                    health.is_connected = True
-                                    health.last_heartbeat = time.time()
-                                    logger.info("Successfully reconnected to %s", server_name)
-                                except Exception as e:
-                                    health.last_error = str(e)
-                                    logger.error("Failed to reconnect to %s: %s", server_name, str(e))
-                
-                await asyncio.sleep(self.HEARTBEAT_INTERVAL / 2)
-            except Exception as e:
-                logger.error("Error in health monitor: %s", str(e))
-                await asyncio.sleep(self.HEARTBEAT_INTERVAL)
-
-    async def _update_server_heartbeat(self, server_name: str):
-        """Update server heartbeat timestamp."""
-        if server_name in self.server_health:
-            self.server_health[server_name].last_heartbeat = time.time()
-            self.server_health[server_name].consecutive_failures = 0
+    async def reconnect(self, server_name: str) -> bool:
+        """Implement ServerReconnector protocol."""
+        try:
+            if server_name in self.available_servers:
+                config = self.available_servers[server_name]
+                if any("ws" in arg for arg in config["args"]) or server_name == "server-sequential-thinking":
+                    await self._handle_websocket_server(server_name, config)
+                else:
+                    params = {
+                        "command": config["command"],
+                        "args": config["args"]
+                    }
+                    if "env" in config:
+                        params["env"] = config["env"]
+                    server_params = StdioServerParameters(**params)
+                    await self._connect_with_retry(server_name, server_params)
+                return True
+        except Exception as e:
+            logger.error("Reconnection failed for %s: %s", server_name, str(e))
+            return False
+        return False
 
     @backoff.on_exception(
         backoff.expo,
@@ -176,9 +148,8 @@ class MCPToolProvider:
         try:
             logger.debug("Establishing connection to %s", server_name)
             
-            # Initialize or update server health
-            if server_name not in self.server_health:
-                self.server_health[server_name] = ServerHealth()
+            # Register with health monitor
+            self.health_monitor.register_server(server_name)
             
             stdio_transport = await self.exit_stack.enter_async_context(
                 stdio_client(server_params)
@@ -196,10 +167,8 @@ class MCPToolProvider:
             await self.sessions[server_name].initialize()
             response = await self.sessions[server_name].list_tools()
             
-            # Update server health
-            self.server_health[server_name].is_connected = True
-            self.server_health[server_name].last_heartbeat = time.time()
-            self.server_health[server_name].consecutive_failures = 0
+            # Update health monitor
+            self.health_monitor.update_heartbeat(server_name)
             
             tool_names = [tool.name for tool in response.tools]
             logger.info("Connected to server '%s' with tools: %s", server_name, tool_names)
@@ -209,15 +178,12 @@ class MCPToolProvider:
             self.all_tools.extend(response.tools)
             logger.debug("Total tools available: %d", len(self.all_tools))
             
-            # Start health monitoring if not already running
-            if self._health_monitor_task is None or self._health_monitor_task.done():
-                self._health_monitor_task = asyncio.create_task(self._monitor_server_health())
+            # Start health monitoring
+            self.health_monitor.start_monitoring()
             
         except Exception as e:
             logger.error("Connection attempt failed for %s: %s", server_name, str(e))
-            if server_name in self.server_health:
-                self.server_health[server_name].last_error = str(e)
-                self.server_health[server_name].is_connected = False
+            self.health_monitor.mark_connection_failed(server_name, str(e))
             await self._cleanup_server(server_name)
             raise ConnectionError(f"Failed to connect to server '{server_name}': {str(e)}")
 
@@ -350,7 +316,7 @@ class MCPToolProvider:
                 
         except Exception as e:
             logger.error("Failed to connect to server %s: %s", server_name, str(e))
-            await self.cleanup()
+            await self.cleanup(server_name)
             raise ConnectionError(f"Failed to connect to server '{server_name}': {str(e)}")
 
     async def mcp_connect_all(self) -> List[Tuple[str, Optional[Exception]]]:
@@ -437,11 +403,18 @@ class MCPToolProvider:
             logger.error("Error processing query: %s", str(e))
             raise
 
-    async def cleanup(self):
+    async def cleanup(self, server_name: str) -> None:
+        """Implement ServerCleanupHandler protocol."""
+        await self._cleanup_server(server_name)
+
+    async def cleanup_all(self):
         """Clean up all resources."""
         if self.exit_stack:
             logger.info("Starting cleanup")
             try:
+                # Stop health monitoring
+                self.health_monitor.stop_monitoring()
+                
                 # First cleanup individual servers
                 server_names = list(self.sessions.keys())
                 for server_name in server_names:
