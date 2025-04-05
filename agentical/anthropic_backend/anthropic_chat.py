@@ -79,11 +79,6 @@ class AnthropicBackend(LLMBackend):
             ValueError: If there's an error communicating with Anthropic
         """
         try:
-            logger.debug(f"Processing query: {query}")
-            logger.debug(f"Number of tools available: {len(tools)}")
-            if context:
-                logger.debug(f"Context messages: {len(context)}")
-            
             # Initialize or use existing conversation context
             messages = list(context) if context else []
             
@@ -92,10 +87,8 @@ class AnthropicBackend(LLMBackend):
             anthropic_messages = []
             
             for msg in messages:
-                logger.debug(f"Processing message with role: {msg['role']}")
                 if msg["role"] == "system":
                     system_content = msg["content"]
-                    logger.debug("Found system message")
                 elif msg["role"] == "user":
                     anthropic_messages.append(self.schema_adapter.create_user_message(msg["content"]))
                 elif msg["role"] == "assistant":
@@ -106,26 +99,18 @@ class AnthropicBackend(LLMBackend):
             
             # Convert tools to Anthropic format
             anthropic_tools = self.schema_adapter.convert_mcp_tools_to_anthropic(tools)
-            logger.debug(f"Converted tools: {json.dumps(anthropic_tools, indent=2)}")
 
             # Set default system content if none provided
             if not system_content:
-                system_content = """
-                You are an AI assistant. When responding, please follow these guidelines:
+                system_content = """You are an AI assistant. When responding, please follow these guidelines:
                 1. If you need to think through the problem, enclose your reasoning within <thinking> tags.
                 2. Always provide your final answer within <answer> tags.
-                3. If no reasoning is needed, you can omit the <thinking> tags.
-                """
+                3. If no reasoning is needed, you can omit the <thinking> tags."""
             
-            # Create system message content blocks if we have system content
+            # Create system message content blocks
             system_blocks = self.schema_adapter.create_system_message(system_content) if system_content else None
             
-            while True:
-                logger.debug("Making API call to Anthropic")
-                logger.debug(f"system_blocks: {json.dumps(system_blocks) if system_blocks else None}")
-                logger.debug(f"messages: {json.dumps(anthropic_messages)}")
-                logger.debug(f"tools: {json.dumps(anthropic_tools)}")
-                
+            while True:  # Continue until we get a response without tool calls
                 # Prepare API call parameters
                 kwargs = {
                     "model": self.model,
@@ -140,82 +125,51 @@ class AnthropicBackend(LLMBackend):
                 if system_blocks:
                     kwargs["system"] = system_blocks
                 
-                logger.debug(f"Final API kwargs: {json.dumps(kwargs, default=str)}")
+                # Get response from Anthropic
                 response = await self.client.messages.create(**kwargs)
-                logger.debug("Received response from Anthropic")
                 
-                # Process content blocks
-                result_text = []
-                has_tool_calls = False
-                
-                logger.debug(f"Processing response content blocks: {len(response.content)} blocks")
-                for block in response.content:
-                    logger.debug(f"Processing content block type: {block.type}")
-                    logger.debug(f"Processing content block: {block}")
-                    
-                    if block.type == "text":
-                        answer = self.schema_adapter.extract_answer(block.text)
-                        result_text.append(answer)
-                
-                # Extract and handle tool calls
+                # Extract tool calls
                 tool_calls = self.schema_adapter.extract_tool_calls(response)
-                if tool_calls:
-                    has_tool_calls = True
-                    for tool_name, tool_params in tool_calls:
-                        await self._handle_tool_use(tool_name, tool_params, execute_tool, anthropic_messages)
                 
-                if not has_tool_calls:
-                    result = " ".join(result_text) or "No response generated"
-                    logger.debug(f"Final response: {result}")
-                    return result
+                # If no tool calls, return the final response
+                if not tool_calls:
+                    result_text = []
+                    for block in response.content:
+                        if block.type == "text":
+                            answer = self.schema_adapter.extract_answer(block.text)
+                            result_text.append(answer)
+                    return " ".join(result_text) or "No response generated"
                 
-                logger.debug("Continuing conversation with tool results")
-            
+                # Handle each tool call
+                for tool_name, tool_params in tool_calls:
+                    try:
+                        # Execute the tool
+                        tool_response = await execute_tool(tool_name, tool_params)
+                        
+                        # Add tool call and response to messages
+                        anthropic_messages.append(
+                            self.schema_adapter.create_assistant_message(
+                                f"I'll use the {tool_name} tool with input: {json.dumps(tool_params)}"
+                            )
+                        )
+                        anthropic_messages.append(
+                            self.schema_adapter.create_tool_response_message(
+                                tool_name=tool_name,
+                                result=tool_response
+                            )
+                        )
+                    except Exception as e:
+                        logger.error(f"Tool execution failed: {str(e)}")
+                        anthropic_messages.append(
+                            self.schema_adapter.create_tool_response_message(
+                                tool_name=tool_name,
+                                error=str(e)
+                            )
+                        )
+                
+                # Continue the loop to handle more tool calls
+                
         except Exception as e:
-            stacktrace = traceback.format_exc()
             logger.error(f"Error in Anthropic conversation: {str(e)}")
-            logger.error(f"Stacktrace: {stacktrace}")
-            raise ValueError(f"Error in Anthropic conversation: {str(e)}")
-            
-    async def _handle_tool_use(
-        self,
-        tool_name: str,
-        tool_params: Dict[str, Any],
-        execute_tool: Callable[[str, Dict[str, Any]], CallToolResult],
-        anthropic_messages: List[Dict[str, Any]]
-    ) -> None:
-        """Handle a tool use from Anthropic's response.
-        
-        Args:
-            tool_name: Name of the tool to execute
-            tool_params: Parameters for the tool
-            execute_tool: Function to execute the tool
-            anthropic_messages: List of messages to append tool results to
-        """
-        try:
-            logger.debug(f"Executing tool: {tool_name}")
-            logger.debug(f"Tool arguments: {json.dumps(tool_params, indent=2)}")
-            
-            tool_response = await execute_tool(tool_name, tool_params)
-            logger.debug(f"Tool response: {tool_response}")
-            
-            # Add tool call and response to messages
-            anthropic_messages.append(
-                self.schema_adapter.create_assistant_message(
-                    f"I'll use the {tool_name} tool with input: {json.dumps(tool_params)}"
-                )
-            )
-            anthropic_messages.append(
-                self.schema_adapter.create_tool_response_message(
-                    tool_name=tool_name,
-                    result=tool_response
-                )
-            )
-        except Exception as e:
-            logger.error(f"Tool execution failed: {str(e)}")
-            anthropic_messages.append(
-                self.schema_adapter.create_tool_response_message(
-                    tool_name=tool_name,
-                    error=str(e)
-                )
-            ) 
+            logger.error(f"Stacktrace: {traceback.format_exc()}")
+            raise ValueError(f"Error in Anthropic conversation: {str(e)}") 
