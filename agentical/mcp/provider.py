@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 from pathlib import Path
 from typing import Dict, Optional, List, Any, Tuple
 
@@ -13,6 +14,7 @@ from mcp.types import CallToolResult
 
 from agentical.api import LLMBackend
 
+logger = logging.getLogger(__name__)
 
 class MCPToolProvider:
     """Main facade for integrating LLMs with MCP tools.
@@ -30,7 +32,9 @@ class MCPToolProvider:
         Raises:
             TypeError: If llm_backend is None or not an instance of LLMBackend.
         """
+        logger.debug("Initializing MCPToolProvider")
         if not isinstance(llm_backend, LLMBackend):
+            logger.error("Invalid llm_backend type: %s", type(llm_backend))
             raise TypeError("llm_backend must be an instance of LLMBackend")
             
         self.sessions: Dict[str, ClientSession] = {}
@@ -41,6 +45,7 @@ class MCPToolProvider:
         self.llm_backend = llm_backend
         self.tools_by_server: Dict[str, List[MCPTool]] = {}
         self.all_tools: List[MCPTool] = []
+        logger.debug("MCPToolProvider initialized successfully")
         
     @staticmethod
     def load_mcp_config(config_path: str | Path) -> Dict[str, dict]:
@@ -52,23 +57,38 @@ class MCPToolProvider:
         Returns:
             Dict of server names to their configurations
         """
-        with open(config_path) as f:
-            config = json.load(f)
+        logger.info("Loading MCP configuration from: %s", config_path)
+        try:
+            with open(config_path) as f:
+                config = json.load(f)
             
-        # Validate each server configuration
-        for server_name, server_config in config.items():
-            if not isinstance(server_config, dict):
-                raise ValueError(f"Configuration for {server_name} must be a dictionary")
-            if "command" not in server_config:
-                raise ValueError(f"Configuration for {server_name} must contain 'command' field")
-            if "args" not in server_config or not isinstance(server_config["args"], list):
-                raise ValueError(f"Configuration for {server_name} must contain 'args' as a list")
-                
-        return config
+            # Validate each server configuration
+            for server_name, server_config in config.items():
+                logger.debug("Validating configuration for server: %s", server_name)
+                if not isinstance(server_config, dict):
+                    logger.error("Invalid configuration type for %s: %s", server_name, type(server_config))
+                    raise ValueError(f"Configuration for {server_name} must be a dictionary")
+                if "command" not in server_config:
+                    logger.error("Missing 'command' in configuration for %s", server_name)
+                    raise ValueError(f"Configuration for {server_name} must contain 'command' field")
+                if "args" not in server_config or not isinstance(server_config["args"], list):
+                    logger.error("Invalid or missing 'args' in configuration for %s", server_name)
+                    raise ValueError(f"Configuration for {server_name} must contain 'args' as a list")
+                    
+            logger.info("Successfully loaded configuration with %d servers", len(config))
+            return config
+        except json.JSONDecodeError as e:
+            logger.error("Failed to parse configuration file: %s", str(e))
+            raise
+        except Exception as e:
+            logger.error("Error loading configuration: %s", str(e))
+            raise
 
     def list_available_servers(self) -> List[str]:
         """List all available MCP servers from the loaded configuration."""
-        return list(self.available_servers.keys())
+        servers = list(self.available_servers.keys())
+        logger.debug("Available servers: %s", servers)
+        return servers
 
     async def mcp_connect(self, server_name: str):
         """Connect to a specific MCP server by name.
@@ -80,31 +100,42 @@ class MCPToolProvider:
             ValueError: If server_name is invalid or configuration is incomplete
             TypeError: If configuration values are of incorrect type
         """
+        logger.info("Connecting to server: %s", server_name)
+        
         if not isinstance(server_name, str):
+            logger.error("Invalid server_name type: %s", type(server_name))
             raise TypeError(f"server_name must be a string, got {type(server_name)}")
             
         if not server_name:
+            logger.error("Empty server_name provided")
             raise ValueError("server_name cannot be empty")
             
         if server_name not in self.available_servers:
+            logger.error("Unknown server: %s. Available: %s", server_name, self.list_available_servers())
             raise ValueError(f"Unknown server: {server_name}. Available servers: {self.list_available_servers()}")
             
         config = self.available_servers[server_name]
+        logger.debug("Server configuration: %s", config)
         
         # Validate required configuration fields
         if not isinstance(config, dict):
+            logger.error("Invalid configuration type for %s: %s", server_name, type(config))
             raise TypeError(f"Configuration for {server_name} must be a dictionary")
             
         if "command" not in config:
+            logger.error("Missing 'command' in configuration for %s", server_name)
             raise ValueError(f"Configuration for {server_name} missing required 'command' field")
             
         if not isinstance(config["command"], str):
+            logger.error("Invalid command type for %s: %s", server_name, type(config["command"]))
             raise TypeError(f"'command' for {server_name} must be a string")
             
         if "args" not in config:
+            logger.error("Missing 'args' in configuration for %s", server_name)
             raise ValueError(f"Configuration for {server_name} missing required 'args' field")
             
         if not isinstance(config["args"], list):
+            logger.error("Invalid args type for %s: %s", server_name, type(config["args"]))
             raise TypeError(f"'args' for {server_name} must be a list")
         
         # Create server parameters with validated fields
@@ -116,16 +147,20 @@ class MCPToolProvider:
         # Only include env if it exists and is a dictionary
         if "env" in config:
             if not isinstance(config["env"], dict):
+                logger.error("Invalid env type for %s: %s", server_name, type(config["env"]))
                 raise TypeError(f"'env' for {server_name} must be a dictionary")
             params["env"] = config["env"]
             
         try:
+            logger.debug("Creating server parameters for %s: %s", server_name, params)
             server_params = StdioServerParameters(**params)
         except Exception as e:
+            logger.error("Failed to create server parameters for %s: %s", server_name, str(e))
             raise ValueError(f"Failed to create server parameters: {str(e)}")
 
         try:
             # Connect to the server
+            logger.debug("Establishing connection to %s", server_name)
             stdio_transport = await self.exit_stack.enter_async_context(
                 stdio_client(server_params)
             )
@@ -133,6 +168,7 @@ class MCPToolProvider:
             self.stdios[server_name], self.writes[server_name] = stdio_transport
             
             # Initialize session
+            logger.debug("Initializing session for %s", server_name)
             self.sessions[server_name] = await self.exit_stack.enter_async_context(
                 ClientSession(self.stdios[server_name], self.writes[server_name])
             )
@@ -141,14 +177,16 @@ class MCPToolProvider:
             await self.sessions[server_name].initialize()
             response = await self.sessions[server_name].list_tools()
             
-            print(f"\nConnected to server '{server_name}' with tools:", 
-                  [tool.name for tool in response.tools])
+            tool_names = [tool.name for tool in response.tools]
+            logger.info("Connected to server '%s' with tools: %s", server_name, tool_names)
             
             # Store MCP tools for this server
             self.tools_by_server[server_name] = response.tools
             self.all_tools.extend(response.tools)
+            logger.debug("Total tools available: %d", len(self.all_tools))
             
         except Exception as e:
+            logger.error("Failed to connect to server %s: %s", server_name, str(e))
             await self.cleanup()
             raise ConnectionError(f"Failed to connect to server '{server_name}': {str(e)}")
 
@@ -169,7 +207,9 @@ class MCPToolProvider:
         """
         # Get list of available servers
         servers = self.list_available_servers()
+        logger.info("Connecting to all servers: %s", servers)
         if not servers:
+            logger.warning("No servers available to connect to")
             return []
 
         results = []
@@ -178,10 +218,14 @@ class MCPToolProvider:
             try:
                 await self.mcp_connect(server_name)
                 results.append((server_name, None))
+                logger.info("Successfully connected to %s", server_name)
             except Exception as e:
                 results.append((server_name, e))
-                print(f"Failed to connect to {server_name}: {e}")
+                logger.error("Failed to connect to %s: %s", server_name, str(e))
 
+        logger.info("Completed connecting to all servers. Successful: %d, Failed: %d", 
+                   sum(1 for _, e in results if e is None),
+                   sum(1 for _, e in results if e is not None))
         return results
 
     async def process_query(self, query: str) -> str:
@@ -193,36 +237,58 @@ class MCPToolProvider:
         Returns:
             The response generated by the LLM
         """
+        logger.info("Processing query: %s", query)
         if not self.sessions:
+            logger.error("No active sessions found")
             raise ValueError("Not connected to any MCP server. Please select and connect to a server first.")
 
         # Execute tool directly with MCP types
         async def execute_tool(tool_name: str, tool_args: Dict[str, Any]) -> CallToolResult:
+            logger.debug("Executing tool %s with args: %s", tool_name, tool_args)
             # Find which server has this tool
             for server_name, tools in self.tools_by_server.items():
                 if any(tool.name == tool_name for tool in tools):
-                    return await self.sessions[server_name].call_tool(tool_name, tool_args)
+                    logger.debug("Found tool %s in server %s", tool_name, server_name)
+                    try:
+                        result = await self.sessions[server_name].call_tool(tool_name, tool_args)
+                        logger.debug("Tool execution successful: %s", result)
+                        return result
+                    except Exception as e:
+                        logger.error("Tool execution failed: %s", str(e))
+                        raise
+            
+            logger.error("Tool %s not found in any server", tool_name)
             raise ValueError(f"Tool {tool_name} not found in any connected server")
 
-        # Process the query using all available tools
-        return await self.llm_backend.process_query(
-            query=query,
-            tools=self.all_tools,
-            execute_tool=execute_tool
-        )
+        try:
+            # Process the query using all available tools
+            logger.debug("Sending query to LLM backend with %d available tools", len(self.all_tools))
+            response = await self.llm_backend.process_query(
+                query=query,
+                tools=self.all_tools,
+                execute_tool=execute_tool
+            )
+            logger.debug("Received response from LLM backend: %s", response)
+            return response
+        except Exception as e:
+            logger.error("Error processing query: %s", str(e))
+            raise
 
     async def cleanup(self):
         """Clean up resources."""
         if self.exit_stack:
+            logger.info("Starting cleanup")
             try:
                 # Close the exit stack which will handle all async context cleanup
                 await self.exit_stack.aclose()
+                logger.debug("Exit stack closed successfully")
             except Exception as e:
-                print(f"Error during cleanup: {e}")
+                logger.error("Error during cleanup: %s", str(e))
             finally:
                 # Clear all stored references
                 self.sessions.clear()
                 self.stdios.clear()
                 self.writes.clear()
                 self.tools_by_server.clear()
-                self.all_tools.clear() 
+                self.all_tools.clear()
+                logger.debug("All resources cleared") 
