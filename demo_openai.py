@@ -8,7 +8,7 @@ from agentical.logging_config import setup_logging
 
 async def main():
     # Enable debug logging
-    setup_logging(logging.DEBUG)
+    # setup_logging(logging.DEBUG)
     await chat_client.run_demo(OpenAIBackend())
 
 
