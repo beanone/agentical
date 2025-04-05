@@ -5,6 +5,10 @@ import json
 import logging
 from pathlib import Path
 from typing import Dict, Optional, List, Any, Tuple
+import backoff
+import time
+from dataclasses import dataclass
+from datetime import datetime
 
 from contextlib import AsyncExitStack
 from mcp import ClientSession, StdioServerParameters
@@ -16,12 +20,27 @@ from agentical.api import LLMBackend
 
 logger = logging.getLogger(__name__)
 
+@dataclass
+class ServerHealth:
+    """Track server connection health."""
+    last_heartbeat: float = 0.0
+    consecutive_failures: int = 0
+    is_connected: bool = False
+    reconnection_attempt: int = 0
+    last_error: Optional[str] = None
+
 class MCPToolProvider:
     """Main facade for integrating LLMs with MCP tools.
     
     This class follows the architecture diagram's Integration Layer, coordinating
     between the LLM Layer and MCP Layer.
     """
+    
+    # Connection settings
+    MAX_RETRIES = 3
+    BASE_DELAY = 1.0
+    HEARTBEAT_INTERVAL = 30  # seconds
+    MAX_HEARTBEAT_MISS = 2
     
     def __init__(self, llm_backend: LLMBackend):
         """Initialize the MCP Tool Provider.
@@ -45,6 +64,8 @@ class MCPToolProvider:
         self.llm_backend = llm_backend
         self.tools_by_server: Dict[str, List[MCPTool]] = {}
         self.all_tools: List[MCPTool] = []
+        self.server_health: Dict[str, ServerHealth] = {}
+        self._health_monitor_task: Optional[asyncio.Task] = None
         logger.debug("MCPToolProvider initialized successfully")
         
     @staticmethod
@@ -89,6 +110,176 @@ class MCPToolProvider:
         servers = list(self.available_servers.keys())
         logger.debug("Available servers: %s", servers)
         return servers
+
+    async def _monitor_server_health(self):
+        """Monitor server connections and attempt reconnection if needed."""
+        while True:
+            try:
+                current_time = time.time()
+                for server_name, health in self.server_health.items():
+                    if not health.is_connected:
+                        continue
+                        
+                    time_since_heartbeat = current_time - health.last_heartbeat
+                    if time_since_heartbeat > self.HEARTBEAT_INTERVAL:
+                        health.consecutive_failures += 1
+                        logger.warning(
+                            "Server %s missed heartbeat. Consecutive failures: %d",
+                            server_name, health.consecutive_failures
+                        )
+                        
+                        if health.consecutive_failures >= self.MAX_HEARTBEAT_MISS:
+                            logger.error("Server %s connection appears dead. Initiating reconnection.", server_name)
+                            health.is_connected = False
+                            await self._cleanup_server(server_name)
+                            
+                            # Attempt reconnection if this is a WebSocket server
+                            if (server_name == "server-sequential-thinking" or
+                                any("ws" in arg for arg in self.available_servers[server_name]["args"])):
+                                try:
+                                    await self._handle_websocket_server(server_name, self.available_servers[server_name])
+                                    health.consecutive_failures = 0
+                                    health.is_connected = True
+                                    health.last_heartbeat = time.time()
+                                    logger.info("Successfully reconnected to %s", server_name)
+                                except Exception as e:
+                                    health.last_error = str(e)
+                                    logger.error("Failed to reconnect to %s: %s", server_name, str(e))
+                
+                await asyncio.sleep(self.HEARTBEAT_INTERVAL / 2)
+            except Exception as e:
+                logger.error("Error in health monitor: %s", str(e))
+                await asyncio.sleep(self.HEARTBEAT_INTERVAL)
+
+    async def _update_server_heartbeat(self, server_name: str):
+        """Update server heartbeat timestamp."""
+        if server_name in self.server_health:
+            self.server_health[server_name].last_heartbeat = time.time()
+            self.server_health[server_name].consecutive_failures = 0
+
+    @backoff.on_exception(
+        backoff.expo,
+        (ConnectionError, TimeoutError),
+        max_tries=MAX_RETRIES,
+        base=BASE_DELAY
+    )
+    async def _connect_with_retry(self, server_name: str, server_params: StdioServerParameters):
+        """Attempt to connect to a server with exponential backoff retry.
+        
+        Args:
+            server_name: Name of the server to connect to
+            server_params: Server connection parameters
+            
+        Raises:
+            ConnectionError: If all connection attempts fail
+        """
+        try:
+            logger.debug("Establishing connection to %s", server_name)
+            
+            # Initialize or update server health
+            if server_name not in self.server_health:
+                self.server_health[server_name] = ServerHealth()
+            
+            stdio_transport = await self.exit_stack.enter_async_context(
+                stdio_client(server_params)
+            )
+            
+            self.stdios[server_name], self.writes[server_name] = stdio_transport
+            
+            # Initialize session
+            logger.debug("Initializing session for %s", server_name)
+            self.sessions[server_name] = await self.exit_stack.enter_async_context(
+                ClientSession(self.stdios[server_name], self.writes[server_name])
+            )
+            
+            # Initialize and get tools
+            await self.sessions[server_name].initialize()
+            response = await self.sessions[server_name].list_tools()
+            
+            # Update server health
+            self.server_health[server_name].is_connected = True
+            self.server_health[server_name].last_heartbeat = time.time()
+            self.server_health[server_name].consecutive_failures = 0
+            
+            tool_names = [tool.name for tool in response.tools]
+            logger.info("Connected to server '%s' with tools: %s", server_name, tool_names)
+            
+            # Store MCP tools for this server
+            self.tools_by_server[server_name] = response.tools
+            self.all_tools.extend(response.tools)
+            logger.debug("Total tools available: %d", len(self.all_tools))
+            
+            # Start health monitoring if not already running
+            if self._health_monitor_task is None or self._health_monitor_task.done():
+                self._health_monitor_task = asyncio.create_task(self._monitor_server_health())
+            
+        except Exception as e:
+            logger.error("Connection attempt failed for %s: %s", server_name, str(e))
+            if server_name in self.server_health:
+                self.server_health[server_name].last_error = str(e)
+                self.server_health[server_name].is_connected = False
+            await self._cleanup_server(server_name)
+            raise ConnectionError(f"Failed to connect to server '{server_name}': {str(e)}")
+
+    async def _cleanup_server(self, server_name: str):
+        """Clean up resources for a specific server.
+        
+        Args:
+            server_name: Name of the server to clean up
+        """
+        logger.info("Cleaning up resources for server: %s", server_name)
+        try:
+            # Remove server-specific tools from all_tools
+            if server_name in self.tools_by_server:
+                server_tools = self.tools_by_server[server_name]
+                self.all_tools = [t for t in self.all_tools if t not in server_tools]
+                del self.tools_by_server[server_name]
+            
+            # Close and remove session
+            if server_name in self.sessions:
+                session = self.sessions.pop(server_name)
+                if hasattr(session, 'close'):
+                    await session.close()
+            
+            # Clean up stdio and write handlers
+            self.stdios.pop(server_name, None)
+            self.writes.pop(server_name, None)
+            
+            logger.debug("Successfully cleaned up resources for %s", server_name)
+        except Exception as e:
+            logger.error("Error during server cleanup for %s: %s", server_name, str(e))
+
+    async def _handle_websocket_server(self, server_name: str, config: Dict[str, Any]):
+        """Handle connection to a WebSocket-based server.
+        
+        Args:
+            server_name: Name of the server
+            config: Server configuration
+            
+        Raises:
+            ConnectionError: If connection fails after retries
+        """
+        logger.info("Detected WebSocket server: %s", server_name)
+        
+        # Add WebSocket-specific configuration
+        params = {
+            "command": config["command"],
+            "args": config["args"],
+            "reconnect_delay": self.BASE_DELAY,
+            "max_retries": self.MAX_RETRIES
+        }
+        
+        if "env" in config:
+            params["env"] = config["env"]
+            
+        try:
+            server_params = StdioServerParameters(**params)
+            await self._connect_with_retry(server_name, server_params)
+        except Exception as e:
+            logger.error("Failed to connect to WebSocket server %s: %s", server_name, str(e))
+            # Ensure cleanup is called for WebSocket server failures
+            await self._cleanup_server(server_name)
+            raise
 
     async def mcp_connect(self, server_name: str):
         """Connect to a specific MCP server by name.
@@ -138,53 +329,25 @@ class MCPToolProvider:
             logger.error("Invalid args type for %s: %s", server_name, type(config["args"]))
             raise TypeError(f"'args' for {server_name} must be a list")
         
-        # Create server parameters with validated fields
-        params = {
-            "command": config["command"],
-            "args": config["args"]
-        }
-        
-        # Only include env if it exists and is a dictionary
-        if "env" in config:
-            if not isinstance(config["env"], dict):
-                logger.error("Invalid env type for %s: %s", server_name, type(config["env"]))
-                raise TypeError(f"'env' for {server_name} must be a dictionary")
-            params["env"] = config["env"]
-            
         try:
-            logger.debug("Creating server parameters for %s: %s", server_name, params)
-            server_params = StdioServerParameters(**params)
-        except Exception as e:
-            logger.error("Failed to create server parameters for %s: %s", server_name, str(e))
-            raise ValueError(f"Failed to create server parameters: {str(e)}")
-
-        try:
-            # Connect to the server
-            logger.debug("Establishing connection to %s", server_name)
-            stdio_transport = await self.exit_stack.enter_async_context(
-                stdio_client(server_params)
-            )
-            
-            self.stdios[server_name], self.writes[server_name] = stdio_transport
-            
-            # Initialize session
-            logger.debug("Initializing session for %s", server_name)
-            self.sessions[server_name] = await self.exit_stack.enter_async_context(
-                ClientSession(self.stdios[server_name], self.writes[server_name])
-            )
-            
-            # Initialize and get tools
-            await self.sessions[server_name].initialize()
-            response = await self.sessions[server_name].list_tools()
-            
-            tool_names = [tool.name for tool in response.tools]
-            logger.info("Connected to server '%s' with tools: %s", server_name, tool_names)
-            
-            # Store MCP tools for this server
-            self.tools_by_server[server_name] = response.tools
-            self.all_tools.extend(response.tools)
-            logger.debug("Total tools available: %d", len(self.all_tools))
-            
+            # Check if this is a WebSocket server
+            if any("ws" in arg for arg in config["args"]) or server_name == "server-sequential-thinking":
+                await self._handle_websocket_server(server_name, config)
+            else:
+                # Handle standard stdio server
+                params = {
+                    "command": config["command"],
+                    "args": config["args"]
+                }
+                if "env" in config:
+                    if not isinstance(config["env"], dict):
+                        logger.error("Invalid env type for %s: %s", server_name, type(config["env"]))
+                        raise TypeError(f"'env' for {server_name} must be a dictionary")
+                    params["env"] = config["env"]
+                
+                server_params = StdioServerParameters(**params)
+                await self._connect_with_retry(server_name, server_params)
+                
         except Exception as e:
             logger.error("Failed to connect to server %s: %s", server_name, str(e))
             await self.cleanup()
@@ -275,11 +438,16 @@ class MCPToolProvider:
             raise
 
     async def cleanup(self):
-        """Clean up resources."""
+        """Clean up all resources."""
         if self.exit_stack:
             logger.info("Starting cleanup")
             try:
-                # Close the exit stack which will handle all async context cleanup
+                # First cleanup individual servers
+                server_names = list(self.sessions.keys())
+                for server_name in server_names:
+                    await self._cleanup_server(server_name)
+                
+                # Then close the exit stack which will handle remaining async context cleanup
                 await self.exit_stack.aclose()
                 logger.debug("Exit stack closed successfully")
             except Exception as e:
