@@ -13,9 +13,11 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.types import Tool as MCPTool
 from mcp.types import CallToolResult
+from pydantic import ValidationError
 
 from agentical.api import LLMBackend
 from agentical.mcp.health import HealthMonitor, ServerReconnector, ServerCleanupHandler
+from agentical.mcp.schemas import MCPConfig, ServerConfig
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +52,7 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
         self.stdios: Dict[str, Any] = {}
         self.writes: Dict[str, Any] = {}
         self.exit_stack = AsyncExitStack()
-        self.available_servers: Dict[str, dict] = {}
+        self.available_servers: Dict[str, ServerConfig] = {}
         self.llm_backend = llm_backend
         self.tools_by_server: Dict[str, List[MCPTool]] = {}
         self.all_tools: List[MCPTool] = []
@@ -65,37 +67,34 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
         logger.debug("MCPToolProvider initialized successfully")
         
     @staticmethod
-    def load_mcp_config(config_path: str | Path) -> Dict[str, dict]:
+    def load_mcp_config(config_path: str | Path) -> Dict[str, ServerConfig]:
         """Load MCP configurations from a JSON file.
         
         Args:
             config_path: Path to the MCP configuration file
             
         Returns:
-            Dict of server names to their configurations
+            Dict of server names to their validated configurations
+            
+        Raises:
+            ValidationError: If configuration is invalid
+            JSONDecodeError: If JSON parsing fails
         """
         logger.info("Loading MCP configuration from: %s", config_path)
         try:
             with open(config_path) as f:
-                config = json.load(f)
+                raw_config = json.load(f)
             
-            # Validate each server configuration
-            for server_name, server_config in config.items():
-                logger.debug("Validating configuration for server: %s", server_name)
-                if not isinstance(server_config, dict):
-                    logger.error("Invalid configuration type for %s: %s", server_name, type(server_config))
-                    raise ValueError(f"Configuration for {server_name} must be a dictionary")
-                if "command" not in server_config:
-                    logger.error("Missing 'command' in configuration for %s", server_name)
-                    raise ValueError(f"Configuration for {server_name} must contain 'command' field")
-                if "args" not in server_config or not isinstance(server_config["args"], list):
-                    logger.error("Invalid or missing 'args' in configuration for %s", server_name)
-                    raise ValueError(f"Configuration for {server_name} must contain 'args' as a list")
-                    
-            logger.info("Successfully loaded configuration with %d servers", len(config))
-            return config
+            # Parse and validate configuration using Pydantic schema
+            config = MCPConfig(servers=raw_config)
+            logger.info("Successfully loaded configuration with %d servers", len(config.servers))
+            return config.servers
+            
         except json.JSONDecodeError as e:
             logger.error("Failed to parse configuration file: %s", str(e))
+            raise
+        except ValidationError as e:
+            logger.error("Invalid configuration format: %s", str(e))
             raise
         except Exception as e:
             logger.error("Error loading configuration: %s", str(e))
@@ -112,15 +111,15 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
         try:
             if server_name in self.available_servers:
                 config = self.available_servers[server_name]
-                if any("ws" in arg for arg in config["args"]) or server_name == "server-sequential-thinking":
+                if config.is_websocket or server_name == "server-sequential-thinking":
                     await self._handle_websocket_server(server_name, config)
                 else:
                     params = {
-                        "command": config["command"],
-                        "args": config["args"]
+                        "command": config.command,
+                        "args": config.args
                     }
-                    if "env" in config:
-                        params["env"] = config["env"]
+                    if config.env:
+                        params["env"] = config.env
                     server_params = StdioServerParameters(**params)
                     await self._connect_with_retry(server_name, server_params)
                 return True
@@ -215,7 +214,7 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
         except Exception as e:
             logger.error("Error during server cleanup for %s: %s", server_name, str(e))
 
-    async def _handle_websocket_server(self, server_name: str, config: Dict[str, Any]):
+    async def _handle_websocket_server(self, server_name: str, config: ServerConfig):
         """Handle connection to a WebSocket-based server.
         
         Args:
@@ -229,21 +228,20 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
         
         # Add WebSocket-specific configuration
         params = {
-            "command": config["command"],
-            "args": config["args"],
+            "command": config.command,
+            "args": config.args,
             "reconnect_delay": self.BASE_DELAY,
             "max_retries": self.MAX_RETRIES
         }
         
-        if "env" in config:
-            params["env"] = config["env"]
+        if config.env:
+            params["env"] = config.env
             
         try:
             server_params = StdioServerParameters(**params)
             await self._connect_with_retry(server_name, server_params)
         except Exception as e:
             logger.error("Failed to connect to WebSocket server %s: %s", server_name, str(e))
-            # Ensure cleanup is called for WebSocket server failures
             await self._cleanup_server(server_name)
             raise
 
@@ -254,18 +252,14 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
             server_name: Name of the server as defined in the configuration
             
         Raises:
-            ValueError: If server_name is invalid or configuration is incomplete
-            TypeError: If configuration values are of incorrect type
+            ValueError: If server_name is invalid or not found
+            ConnectionError: If connection fails
         """
         logger.info("Connecting to server: %s", server_name)
         
-        if not isinstance(server_name, str):
-            logger.error("Invalid server_name type: %s", type(server_name))
-            raise TypeError(f"server_name must be a string, got {type(server_name)}")
-            
-        if not server_name:
-            logger.error("Empty server_name provided")
-            raise ValueError("server_name cannot be empty")
+        if not isinstance(server_name, str) or not server_name.strip():
+            logger.error("Invalid server_name: %s", server_name)
+            raise ValueError("server_name must be a non-empty string")
             
         if server_name not in self.available_servers:
             logger.error("Unknown server: %s. Available: %s", server_name, self.list_available_servers())
@@ -274,42 +268,16 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
         config = self.available_servers[server_name]
         logger.debug("Server configuration: %s", config)
         
-        # Validate required configuration fields
-        if not isinstance(config, dict):
-            logger.error("Invalid configuration type for %s: %s", server_name, type(config))
-            raise TypeError(f"Configuration for {server_name} must be a dictionary")
-            
-        if "command" not in config:
-            logger.error("Missing 'command' in configuration for %s", server_name)
-            raise ValueError(f"Configuration for {server_name} missing required 'command' field")
-            
-        if not isinstance(config["command"], str):
-            logger.error("Invalid command type for %s: %s", server_name, type(config["command"]))
-            raise TypeError(f"'command' for {server_name} must be a string")
-            
-        if "args" not in config:
-            logger.error("Missing 'args' in configuration for %s", server_name)
-            raise ValueError(f"Configuration for {server_name} missing required 'args' field")
-            
-        if not isinstance(config["args"], list):
-            logger.error("Invalid args type for %s: %s", server_name, type(config["args"]))
-            raise TypeError(f"'args' for {server_name} must be a list")
-        
         try:
-            # Check if this is a WebSocket server
-            if any("ws" in arg for arg in config["args"]) or server_name == "server-sequential-thinking":
+            if config.is_websocket or server_name == "server-sequential-thinking":
                 await self._handle_websocket_server(server_name, config)
             else:
-                # Handle standard stdio server
                 params = {
-                    "command": config["command"],
-                    "args": config["args"]
+                    "command": config.command,
+                    "args": config.args
                 }
-                if "env" in config:
-                    if not isinstance(config["env"], dict):
-                        logger.error("Invalid env type for %s: %s", server_name, type(config["env"]))
-                        raise TypeError(f"'env' for {server_name} must be a dictionary")
-                    params["env"] = config["env"]
+                if config.env:
+                    params["env"] = config.env
                 
                 server_params = StdioServerParameters(**params)
                 await self._connect_with_retry(server_name, server_params)
@@ -403,10 +371,6 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
             logger.error("Error processing query: %s", str(e))
             raise
 
-    async def cleanup(self, server_name: str) -> None:
-        """Implement ServerCleanupHandler protocol."""
-        await self._cleanup_server(server_name)
-
     async def cleanup_all(self):
         """Clean up all resources."""
         if self.exit_stack:
@@ -432,4 +396,15 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
                 self.writes.clear()
                 self.tools_by_server.clear()
                 self.all_tools.clear()
-                logger.debug("All resources cleared") 
+                logger.debug("All resources cleared")
+                
+    async def cleanup(self, server_name: Optional[str] = None) -> None:
+        """Implement ServerCleanupHandler protocol.
+        
+        Args:
+            server_name: Optional name of the server to clean up. If None, cleans up all servers.
+        """
+        if server_name is None:
+            await self.cleanup_all()
+        else:
+            await self._cleanup_server(server_name) 
