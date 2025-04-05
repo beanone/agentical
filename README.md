@@ -142,7 +142,7 @@ Here are some example queries that demonstrate the power of combining multiple s
 
 1. **Weather Comparison Across Cities**:
    ```
-   "Show me the temperature difference between Seattle and Beijing now"
+   "Use the calculator-server to find the temperature difference between Seattle and Beijing in celsius"
    ```
    This query uses the weather server to:
    - Get current weather in Seattle

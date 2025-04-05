@@ -61,67 +61,70 @@ class GeminiBackend(LLMBackend):
         Returns:
             Generated response from Gemini
         """
-        # Convert query to Gemini format and prepare contents
-        contents = context or []
-        contents.append(self.schema_adapter.create_user_content(query))
-        
-        # Convert tools to Gemini format
-        gemini_tools = self.schema_adapter.convert_mcp_tools_to_gemini(tools)
-        
-        # Get initial response from Gemini
-        response = self.client.models.generate_content(
-            model=self.model,
-            contents=contents,
-            config=genai.types.GenerateContentConfig(
-                tools=gemini_tools,
-            ),
-        )
-        
-        final_text = []
-        
-        # Process response and handle tool calls
-        for candidate in response.candidates:
-            if candidate.content.parts:
-                for part in candidate.content.parts:
-                    tool_call = self.schema_adapter.extract_tool_call(part)
-                    if tool_call:
-                        tool_name, tool_args = tool_call
-                        print(f"\n[Gemini requested tool call: {tool_name} with args {tool_args}]")
+        try:
+            # Convert query to Gemini format and prepare contents
+            contents = context or []
+            contents.append(self.schema_adapter.create_user_content(query))
+            
+            # Convert tools to Gemini format
+            gemini_tools = self.schema_adapter.convert_mcp_tools_to_gemini(tools)
+            
+            while True:  # Continue until we get a response without tool calls
+                # Get response from Gemini
+                response = self.client.models.generate_content(
+                    model=self.model,
+                    contents=contents,
+                    config=genai.types.GenerateContentConfig(
+                        tools=gemini_tools,
+                    ),
+                )
+                
+                if not response.candidates:
+                    return "No response generated"
+                
+                has_tool_calls = False
+                final_text = []
+                
+                # Process each candidate's content parts
+                for candidate in response.candidates:
+                    if not candidate.content.parts:
+                        continue
                         
-                        # Execute the tool
-                        try:
-                            result = await execute_tool(tool_name, tool_args)
-                            # Add tool response to context
-                            contents.extend(
-                                self.schema_adapter.create_tool_response_content(
-                                    function_call_part=part,
-                                    tool_name=tool_name,
-                                    result=result
+                    for part in candidate.content.parts:
+                        tool_call = self.schema_adapter.extract_tool_call(part)
+                        if tool_call:
+                            has_tool_calls = True
+                            tool_name, tool_args = tool_call
+                            
+                            # Execute the tool
+                            try:
+                                result = await execute_tool(tool_name, tool_args)
+                                # Add tool response to context
+                                contents.extend(
+                                    self.schema_adapter.create_tool_response_content(
+                                        function_call_part=part,
+                                        tool_name=tool_name,
+                                        result=result
+                                    )
                                 )
-                            )
-                        except Exception as e:
-                            logger.error("Tool execution failed: %s", str(e))
-                            contents.extend(
-                                self.schema_adapter.create_tool_response_content(
-                                    function_call_part=part,
-                                    tool_name=tool_name,
-                                    error=str(e)
+                            except Exception as e:
+                                logger.error("Tool execution failed: %s", str(e))
+                                contents.extend(
+                                    self.schema_adapter.create_tool_response_content(
+                                        function_call_part=part,
+                                        tool_name=tool_name,
+                                        error=str(e)
+                                    )
                                 )
-                            )
-                        
-                        # Get final response from Gemini
-                        response = self.client.models.generate_content(
-                            model=self.model,
-                            contents=contents,
-                            config=genai.types.GenerateContentConfig(
-                                tools=gemini_tools,
-                            ),
-                        )
-                        
-                        # Extract final response text
-                        if response.candidates and response.candidates[0].content.parts:
-                            final_text.append(response.candidates[0].content.parts[0].text)
-                    elif hasattr(part, 'text'):
-                        final_text.append(part.text)
-        
-        return "\n".join(final_text) if final_text else "No response generated" 
+                        elif hasattr(part, 'text'):
+                            final_text.append(part.text)
+                
+                # If no tool calls were made, return the final response
+                if not has_tool_calls:
+                    return "\n".join(final_text) if final_text else "No response generated"
+                
+                # Continue the loop to handle more tool calls
+                
+        except Exception as e:
+            logger.error("Error in Gemini conversation: %s", str(e))
+            raise ValueError(f"Error in Gemini conversation: {str(e)}") 

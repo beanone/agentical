@@ -94,18 +94,21 @@ class OpenAIBackend(LLMBackend):
             # Convert tools to OpenAI format
             formatted_tools = self._format_tools(tools)
             
-            # Get response from OpenAI
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                tools=formatted_tools,
-                tool_choice="auto"
-            )
-            
-            message = response.choices[0].message
-            
-            # Check if the model wanted to call a function
-            if message.tool_calls:
+            while True:  # Continue until we get a response without tool calls
+                # Get response from OpenAI
+                response = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    tools=formatted_tools,
+                    tool_choice="auto"
+                )
+                
+                message = response.choices[0].message
+                
+                # If no tool calls, return the final response
+                if not message.tool_calls:
+                    return message.content or "No response generated"
+                
                 # Handle each tool call
                 for tool_call in message.tool_calls:
                     function_name = tool_call.function.name
@@ -143,17 +146,7 @@ class OpenAIBackend(LLMBackend):
                         "content": str(function_response)
                     })
                 
-                # Get final response after tool calls
-                final_response = await self.client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    tools=formatted_tools,
-                    tool_choice="auto"
-                )
-                
-                return final_response.choices[0].message.content or "No response generated"
-            
-            return message.content or "No response generated"
+                # Continue the loop to let the model make more tool calls if needed
             
         except Exception as e:
             raise ValueError(f"Error in OpenAI conversation: {str(e)}")
