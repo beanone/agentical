@@ -1,1 +1,0 @@
-# Remove the cancel_pending method since we can't modify mcp.ClientSession 
