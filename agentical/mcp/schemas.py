@@ -22,11 +22,6 @@ class ServerConfig(BaseModel):
         if v and any(not isinstance(arg, str) or not arg.strip() for arg in v):
             raise ValueError("All args must be non-empty strings")
         return v
-    
-    @property
-    def is_websocket(self) -> bool:
-        """Check if this is a WebSocket server configuration."""
-        return any("ws" in arg for arg in self.args)
 
 class MCPConfig(BaseModel):
     """Schema for MCP configuration file."""

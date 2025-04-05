@@ -161,8 +161,7 @@ class MCPConnectionManager:
         """Connect to an MCP server.
         
         This is the main entry point for establishing server connections. It handles
-        both WebSocket and stdio connections, delegating to the appropriate handler
-        based on the server configuration.
+        connections using the MCP protocol, which abstracts the underlying transport.
         
         Args:
             server_name: Name of the server to connect to. Must be unique.
@@ -176,7 +175,6 @@ class MCPConnectionManager:
             ValueError: If server is already connected or invalid configuration
             
         Note:
-            - For WebSocket servers, additional configuration is applied
             - Connections are automatically retried on failure
             - Resources are properly cleaned up on failure
         """
@@ -184,65 +182,17 @@ class MCPConnectionManager:
             raise ValueError(f"Server {server_name} is already connected")
             
         try:
-            if config.is_websocket or server_name == "server-sequential-thinking":
-                return await self._handle_websocket_connection(server_name, config)
-            else:
-                return await self._handle_stdio_connection(server_name, config)
+            return await self._handle_connection(server_name, config)
         except Exception as e:
             logger.error("Failed to connect to server %s: %s", server_name, str(e))
             await self.cleanup(server_name)
             raise ConnectionError(f"Failed to connect to server '{server_name}': {str(e)}")
 
-    async def _handle_websocket_connection(self, server_name: str, config: ServerConfig) -> ClientSession:
-        """Handle connection to a WebSocket-based server.
+    async def _handle_connection(self, server_name: str, config: ServerConfig) -> ClientSession:
+        """Handle connection to an MCP server.
         
-        Specialized connection handler for WebSocket servers. Applies WebSocket-specific
-        configuration and establishes the connection with appropriate retry settings.
-        
-        Args:
-            server_name: Name of the server
-            config: Server configuration
-            
-        Returns:
-            The established ClientSession
-            
-        Raises:
-            ConnectionError: If connection fails
-            
-        Note:
-            WebSocket connections include additional configuration for:
-            - Reconnection delay
-            - Maximum retry attempts
-            - Environment variables
-        """
-        logger.info("Detected WebSocket server: %s", server_name)
-        
-        # Add WebSocket-specific configuration
-        params = {
-            "command": config.command,
-            "args": config.args,
-            "reconnect_delay": self.BASE_DELAY,
-            "max_retries": self.MAX_RETRIES
-        }
-        
-        if config.env:
-            params["env"] = config.env
-            
-        server_params = StdioServerParameters(**params)
-        session, stdio, write = await self._connect_with_retry(server_name, server_params)
-        
-        # Store connection details
-        self.sessions[server_name] = session
-        self.stdios[server_name] = stdio
-        self.writes[server_name] = write
-        
-        return session
-
-    async def _handle_stdio_connection(self, server_name: str, config: ServerConfig) -> ClientSession:
-        """Handle connection to a stdio-based server.
-        
-        Specialized connection handler for stdio-based servers. Creates and manages
-        the stdio connection with appropriate parameters.
+        Creates and manages the server connection with appropriate parameters,
+        letting the MCP protocol handle the underlying transport details.
         
         Args:
             server_name: Name of the server
@@ -253,10 +203,6 @@ class MCPConnectionManager:
             
         Raises:
             ConnectionError: If connection fails
-            
-        Note:
-            Stdio connections are simpler than WebSocket connections but still
-            benefit from the retry mechanism and resource management.
         """
         params = {
             "command": config.command,
