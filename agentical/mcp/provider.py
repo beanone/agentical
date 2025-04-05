@@ -167,24 +167,21 @@ class MCPToolProvider:
                 else:
                     print(f"Successfully connected to {server_name}")
         """
-        async def connect_server(server_name: str) -> Tuple[str, Optional[Exception]]:
-            try:
-                await self.mcp_connect(server_name)
-                return server_name, None
-            except Exception as e:
-                return server_name, e
-
         # Get list of available servers
         servers = self.list_available_servers()
         if not servers:
             return []
 
-        # Create tasks for connecting to each server
-        connection_tasks = [connect_server(server) for server in servers]
-        
-        # Wait for all connections to complete
-        results = await asyncio.gather(*connection_tasks, return_exceptions=False)
-        
+        results = []
+        # Connect to each server sequentially to avoid task/context issues
+        for server_name in servers:
+            try:
+                await self.mcp_connect(server_name)
+                results.append((server_name, None))
+            except Exception as e:
+                results.append((server_name, e))
+                print(f"Failed to connect to {server_name}: {e}")
+
         return results
 
     async def process_query(self, query: str) -> str:
@@ -217,9 +214,15 @@ class MCPToolProvider:
     async def cleanup(self):
         """Clean up resources."""
         if self.exit_stack:
-            await self.exit_stack.aclose()
-            self.sessions.clear()
-            self.stdios.clear()
-            self.writes.clear()
-            self.tools_by_server.clear()
-            self.all_tools.clear() 
+            try:
+                # Close the exit stack which will handle all async context cleanup
+                await self.exit_stack.aclose()
+            except Exception as e:
+                print(f"Error during cleanup: {e}")
+            finally:
+                # Clear all stored references
+                self.sessions.clear()
+                self.stdios.clear()
+                self.writes.clear()
+                self.tools_by_server.clear()
+                self.all_tools.clear() 
