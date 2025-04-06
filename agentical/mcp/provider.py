@@ -59,7 +59,7 @@ from agentical.mcp.health import HealthMonitor, ServerReconnector, ServerCleanup
 from agentical.mcp.schemas import ServerConfig
 from agentical.mcp.connection import MCPConnectionManager
 from agentical.mcp.config import MCPConfigProvider, DictBasedMCPConfigProvider
-from agentical.utils.log_utils import redact_sensitive_data, sanitize_log_message
+from agentical.utils.log_utils import sanitize_log_message
 
 logger = logging.getLogger(__name__)
 
@@ -582,11 +582,11 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
             - Updates health monitoring on successful tool execution
         """
         start_time = time.time()
-        logger.info("Processing query", extra=redact_sensitive_data({
+        logger.info("Processing query", extra={
             "query": query,
             "num_tools_available": len(self.all_tools),
             "num_servers": len(self.tools_by_server)
-        }))
+        })
         
         if not self.tools_by_server:
             logger.error("No active sessions")
@@ -595,10 +595,10 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
         # Execute tool directly with MCP types
         async def execute_tool(tool_name: str, tool_args: Dict[str, Any]) -> CallToolResult:
             tool_start = time.time()
-            logger.debug("Executing tool", extra=redact_sensitive_data({
+            logger.debug("Executing tool", extra={
                 "tool_name": tool_name,
                 "tool_args": tool_args
-            }))
+            })
             
             # Find which server has this tool
             for server_name, tools in self.tools_by_server.items():

@@ -10,7 +10,7 @@ import openai
 from openai.types.chat import ChatCompletion
 
 from agentical.api.llm_backend import LLMBackend
-from agentical.utils.log_utils import redact_sensitive_data, sanitize_log_message
+from agentical.utils.log_utils import sanitize_log_message
 from mcp.types import Tool as MCPTool
 from mcp.types import CallToolResult
 
@@ -43,10 +43,10 @@ class OpenAIBackend(LLMBackend):
         try:
             self.client = openai.AsyncOpenAI(api_key=api_key)
             self.model = os.getenv("OPENAI_MODEL", self.DEFAULT_MODEL)
-            logger.info("Initialized OpenAI client", extra=redact_sensitive_data({
+            logger.info("Initialized OpenAI client", extra={
                 "model": self.model,
                 "api_key_length": len(api_key)
-            }))
+            })
         except Exception as e:
             error_msg = sanitize_log_message(f"Failed to initialize OpenAI client: {str(e)}")
             logger.error(error_msg, exc_info=True)
@@ -123,11 +123,11 @@ class OpenAIBackend(LLMBackend):
         """
         start_time = time.time()
         try:
-            logger.info("Processing query", extra=redact_sensitive_data({
+            logger.info("Processing query", extra={
                 "query": query,
                 "num_tools": len(tools),
                 "has_context": context is not None
-            }))
+            })
             
             # Initialize or use existing conversation context
             messages = list(context) if context else []

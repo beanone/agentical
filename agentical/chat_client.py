@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from agentical.api import LLMBackend
 from agentical.mcp import MCPToolProvider
 from agentical.mcp.config import FileBasedMCPConfigProvider
-from agentical.utils.log_utils import redact_sensitive_data, sanitize_log_message
+from agentical.utils.log_utils import sanitize_log_message
 
 logger = logging.getLogger(__name__)
 
@@ -48,10 +48,10 @@ async def chat_loop(provider: MCPToolProvider):
             query_start = time.time()
             try:
                 # Process the user's query and display the response
-                logger.debug("Processing user query", extra=redact_sensitive_data({
+                logger.debug("Processing user query", extra={
                     "query": query,
                     "query_number": query_count
-                }))
+                })
                 response = await provider.process_query(query)
                 query_duration = time.time() - query_start
                 logger.debug("Query processed", extra={
