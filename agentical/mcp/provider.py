@@ -50,6 +50,7 @@ from typing import Dict, Optional, List, Any, Tuple
 import asyncio
 
 from contextlib import AsyncExitStack
+
 from mcp.types import Tool as MCPTool
 from mcp.types import CallToolResult
 
@@ -58,6 +59,7 @@ from agentical.mcp.health import HealthMonitor, ServerReconnector, ServerCleanup
 from agentical.mcp.schemas import ServerConfig
 from agentical.mcp.connection import MCPConnectionManager
 from agentical.mcp.config import MCPConfigProvider, DictBasedMCPConfigProvider
+from agentical.mcp.tool_registry import ToolRegistry
 from agentical.utils.log_utils import sanitize_log_message
 
 logger = logging.getLogger(__name__)
@@ -75,8 +77,7 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
         MAX_HEARTBEAT_MISS (int): Maximum missed heartbeats before reconnection
         connection_manager (MCPConnectionManager): Manages server connections
         available_servers (Dict[str, ServerConfig]): Available server configurations
-        tools_by_server (Dict[str, List[MCPTool]]): Tools indexed by server
-        all_tools (List[MCPTool]): Combined list of all available tools
+        tool_registry (ToolRegistry): Manages tool registration and lookup
     """
     
     # Health monitoring settings
@@ -122,8 +123,7 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
         self.connection_manager = MCPConnectionManager(self.exit_stack)
         self.available_servers: Dict[str, ServerConfig] = {}
         self.llm_backend = llm_backend
-        self.tools_by_server: Dict[str, List[MCPTool]] = {}
-        self.all_tools: List[MCPTool] = []
+        self.tool_registry = ToolRegistry()
         
         # Store configuration source
         self.config_provider = config_provider
@@ -224,9 +224,8 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
                 # Update health monitor
                 self.health_monitor.update_heartbeat(server_name)
                 
-                # Store MCP tools for this server
-                self.tools_by_server[server_name] = response.tools
-                self.all_tools.extend(response.tools)
+                # Register tools
+                self.tool_registry.register_server_tools(server_name, response.tools)
                 
                 tool_names = [tool.name for tool in response.tools]
                 duration = time.time() - start_time
@@ -302,23 +301,8 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
         })
         
         try:
-            # Remove server-specific tools
-            num_tools_removed = 0
-            if server_name in self.tools_by_server:
-                server_tools = self.tools_by_server[server_name]
-                num_tools_removed = len(server_tools)
-                
-                # Get tools from other servers to maintain in all_tools
-                other_servers_tools = []
-                for other_server, tools in self.tools_by_server.items():
-                    if other_server != server_name:
-                        other_servers_tools.extend(tools)
-                
-                # Update all_tools to only include tools from other servers
-                self.all_tools = other_servers_tools
-                
-                # Remove server from tools_by_server
-                del self.tools_by_server[server_name]
+            # Remove server tools
+            num_tools_removed = self.tool_registry.remove_server_tools(server_name)
             
             # Clean up connection
             await self.connection_manager.cleanup(server_name)
@@ -327,7 +311,7 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
             logger.info("Server cleanup completed", extra={
                 "server_name": server_name,
                 "num_tools_removed": num_tools_removed,
-                "remaining_tools": len(self.all_tools),
+                "remaining_tools": len(self.tool_registry.all_tools),
                 "duration_ms": int(duration * 1000)
             })
             
@@ -403,14 +387,8 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
             
         finally:
             # Clear all stored references
-            num_tools = len(self.all_tools) if hasattr(self, 'all_tools') else 0
-            num_servers = len(self.tools_by_server) if hasattr(self, 'tools_by_server') else 0
+            num_tools, num_servers = self.tool_registry.clear()
             
-            if hasattr(self, 'tools_by_server'):
-                self.tools_by_server.clear()
-            if hasattr(self, 'all_tools'):
-                self.all_tools.clear()
-                
             duration = time.time() - start_time
             logger.info("Provider cleanup completed", extra={
                 "num_tools_cleared": num_tools,
@@ -470,8 +448,7 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
             self.health_monitor.update_heartbeat(server_name)
             
             # Store MCP tools for this server
-            self.tools_by_server[server_name] = response.tools
-            self.all_tools.extend(response.tools)
+            self.tool_registry.register_server_tools(server_name, response.tools)
             
             tool_names = [tool.name for tool in response.tools]
             duration = time.time() - start_time
@@ -583,11 +560,11 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
         start_time = time.time()
         logger.info("Processing query", extra={
             "query": query,
-            "num_tools_available": len(self.all_tools),
-            "num_servers": len(self.tools_by_server)
+            "num_tools_available": len(self.tool_registry.all_tools),
+            "num_servers": len(self.tool_registry.tools_by_server)
         })
         
-        if not self.tools_by_server:
+        if not self.tool_registry.tools_by_server:
             logger.error("No active sessions")
             raise ValueError("Not connected to any MCP server. Please select and connect to a server first.")
 
@@ -600,31 +577,31 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
             })
             
             # Find which server has this tool
-            for server_name, tools in self.tools_by_server.items():
-                if any(tool.name == tool_name for tool in tools):
-                    logger.debug("Found tool in server", extra={
+            server_name = self.tool_registry.find_tool_server(tool_name)
+            if server_name:
+                logger.debug("Found tool in server", extra={
+                    "tool_name": tool_name,
+                    "server_name": server_name
+                })
+                try:
+                    session = self.connection_manager.sessions[server_name]
+                    result = await session.call_tool(tool_name, tool_args)
+                    tool_duration = time.time() - tool_start
+                    logger.debug("Tool execution successful", extra={
                         "tool_name": tool_name,
-                        "server_name": server_name
+                        "server_name": server_name,
+                        "duration_ms": int(tool_duration * 1000)
                     })
-                    try:
-                        session = self.connection_manager.sessions[server_name]
-                        result = await session.call_tool(tool_name, tool_args)
-                        tool_duration = time.time() - tool_start
-                        logger.debug("Tool execution successful", extra={
-                            "tool_name": tool_name,
-                            "server_name": server_name,
-                            "duration_ms": int(tool_duration * 1000)
-                        })
-                        return result
-                    except Exception as e:
-                        tool_duration = time.time() - tool_start
-                        logger.error("Tool execution failed", extra={
-                            "tool_name": tool_name,
-                            "server_name": server_name,
-                            "error": sanitize_log_message(str(e)),
-                            "duration_ms": int(tool_duration * 1000)
-                        })
-                        raise
+                    return result
+                except Exception as e:
+                    tool_duration = time.time() - tool_start
+                    logger.error("Tool execution failed", extra={
+                        "tool_name": tool_name,
+                        "server_name": server_name,
+                        "error": sanitize_log_message(str(e)),
+                        "duration_ms": int(tool_duration * 1000)
+                    })
+                    raise
             
             tool_duration = time.time() - tool_start
             logger.error("Tool not found", extra={
@@ -636,11 +613,11 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
         try:
             # Process the query using all available tools
             logger.debug("Sending query to LLM backend", extra={
-                "num_tools": len(self.all_tools)
+                "num_tools": len(self.tool_registry.all_tools)
             })
             response = await self.llm_backend.process_query(
                 query=query,
-                tools=self.all_tools,
+                tools=self.tool_registry.all_tools,
                 execute_tool=execute_tool
             )
             duration = time.time() - start_time
