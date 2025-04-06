@@ -308,7 +308,17 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
             if server_name in self.tools_by_server:
                 server_tools = self.tools_by_server[server_name]
                 num_tools_removed = len(server_tools)
-                self.all_tools = [t for t in self.all_tools if t not in server_tools]
+                
+                # Get tools from other servers to maintain in all_tools
+                other_servers_tools = []
+                for other_server, tools in self.tools_by_server.items():
+                    if other_server != server_name:
+                        other_servers_tools.extend(tools)
+                
+                # Update all_tools to only include tools from other servers
+                self.all_tools = other_servers_tools
+                
+                # Remove server from tools_by_server
                 del self.tools_by_server[server_name]
             
             # Clean up connection
@@ -318,6 +328,7 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
             logger.info("Server cleanup completed", extra={
                 "server_name": server_name,
                 "num_tools_removed": num_tools_removed,
+                "remaining_tools": len(self.all_tools),
                 "duration_ms": int(duration * 1000)
             })
             
