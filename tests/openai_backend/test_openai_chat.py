@@ -4,7 +4,7 @@ import json
 import os
 import pytest
 from unittest.mock import AsyncMock, Mock, patch
-from openai.types.chat import  ChatCompletion, ChatCompletionMessage
+from openai.types.chat import ChatCompletion, ChatCompletionMessage
 
 from agentical.openai_backend.openai_chat import OpenAIBackend
 from mcp.types import Tool as MCPTool, CallToolResult
@@ -12,7 +12,7 @@ from mcp.types import Tool as MCPTool, CallToolResult
 @pytest.fixture
 def mock_openai_client():
     """Fixture providing a mock OpenAI client."""
-    with patch('agentical.openai_backend.openai_chat.AsyncOpenAI') as mock:
+    with patch('agentical.openai_backend.openai_chat.openai.AsyncOpenAI') as mock:
         yield mock
 
 @pytest.fixture
@@ -428,8 +428,9 @@ def test_init_with_custom_model(mock_env_vars):
 
 def test_init_with_invalid_api_key():
     """Test initialization with invalid API key."""
-    with pytest.raises(ValueError, match="Failed to initialize OpenAI client"):
-        OpenAIBackend(api_key="invalid_key")
+    with patch('agentical.openai_backend.openai_chat.openai.AsyncOpenAI', side_effect=Exception("Invalid API key")):
+        with pytest.raises(ValueError, match="Failed to initialize OpenAI client: Invalid API key"):
+            OpenAIBackend(api_key="invalid_key")
 
 @pytest.mark.asyncio
 async def test_process_query_with_multiple_tool_calls(mock_env_vars, mock_openai_client, mock_mcp_tools):

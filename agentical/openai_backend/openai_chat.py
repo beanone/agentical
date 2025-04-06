@@ -6,7 +6,7 @@ import os
 import time
 from typing import Any, Dict, List, Optional, Callable
 
-from openai import AsyncOpenAI
+import openai
 from openai.types.chat import ChatCompletion
 
 from agentical.api.llm_backend import LLMBackend
@@ -41,7 +41,7 @@ class OpenAIBackend(LLMBackend):
             raise ValueError("OPENAI_API_KEY not found. Please provide it or set in environment.")
             
         try:
-            self.client = AsyncOpenAI(api_key=api_key)
+            self.client = openai.AsyncOpenAI(api_key=api_key)
             self.model = os.getenv("OPENAI_MODEL", self.DEFAULT_MODEL)
             logger.info("Initialized OpenAI client", extra=redact_sensitive_data({
                 "model": self.model,
