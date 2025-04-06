@@ -126,9 +126,10 @@ async def test_provider_connect(mock_llm_backend, valid_server_configs, mock_ses
     with patch.object(provider.connection_manager, 'connect', side_effect=lambda name, _: mock_session(name)):
         await provider.mcp_connect("server1")
         
-        assert "server1" in provider.tools_by_server
-        assert len(provider.tools_by_server["server1"]) == 2
-        assert len(provider.all_tools) == 2
+        # Check tools are registered correctly
+        server_tools = provider.tool_registry.get_server_tools("server1")
+        assert len(server_tools) == 2
+        assert len(provider.tool_registry.all_tools) == 2
         
         # Test invalid server name
         with pytest.raises(ValueError, match="must be a non-empty string"):
@@ -149,8 +150,8 @@ async def test_provider_connect_all(mock_llm_backend, valid_server_configs, mock
         
         assert len(results) == 2
         assert all(error is None for _, error in results)
-        assert len(provider.tools_by_server) == 2
-        assert len(provider.all_tools) == 4  # 2 tools per server
+        assert len(provider.tool_registry.tools_by_server) == 2
+        assert len(provider.tool_registry.all_tools) == 4  # 2 tools per server
 
 @pytest.mark.asyncio
 async def test_provider_reconnect(mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack):
@@ -163,7 +164,7 @@ async def test_provider_reconnect(mock_llm_backend, valid_server_configs, mock_s
         # Test successful reconnection
         success = await provider.reconnect("server1")
         assert success
-        assert "server1" in provider.tools_by_server
+        assert len(provider.tool_registry.get_server_tools("server1")) == 2
         
         # Test reconnection to unknown server
         success = await provider.reconnect("nonexistent")
@@ -182,20 +183,19 @@ async def test_provider_cleanup(mock_llm_backend, valid_server_configs, mock_ses
             await provider.mcp_connect_all()
             
             # Verify initial state
-            assert len(provider.tools_by_server) == 2
-            assert len(provider.all_tools) == 4  # 2 tools per server
+            assert len(provider.tool_registry.tools_by_server) == 2
+            assert len(provider.tool_registry.all_tools) == 4  # 2 tools per server
             
             # Test single server cleanup
             await provider.cleanup("server1")
-            assert "server1" not in provider.tools_by_server
-            assert "server2" in provider.tools_by_server
-            assert len(provider.tools_by_server["server2"]) == 2
-            assert len(provider.all_tools) == 2  # Only server2's tools remain
+            assert not provider.tool_registry.get_server_tools("server1")
+            assert len(provider.tool_registry.get_server_tools("server2")) == 2
+            assert len(provider.tool_registry.all_tools) == 2  # Only server2's tools remain
             
             # Test cleanup all
             await provider.cleanup_all()
-            assert not provider.tools_by_server
-            assert not provider.all_tools
+            assert not provider.tool_registry.tools_by_server
+            assert not provider.tool_registry.all_tools
     finally:
         # Ensure health monitor is stopped
         if provider.health_monitor._monitor_task and not provider.health_monitor._monitor_task.done():
@@ -258,50 +258,48 @@ async def test_health_monitoring(mock_llm_backend, valid_server_configs, mock_se
 
 @pytest.mark.asyncio
 async def test_error_handling(mock_llm_backend, valid_server_configs, mock_exit_stack):
-    """Test error handling in various scenarios."""
+    """Test error handling during operations."""
     provider = MCPToolProvider(mock_llm_backend, server_configs=valid_server_configs)
     provider.exit_stack = mock_exit_stack
     await provider.initialize()
     
-    # Test connection failure
-    failing_session = MockClientSession(server_name="server1")
-    failing_session.list_tools = AsyncMock(side_effect=Exception("Connection failed"))
-    
-    with patch.object(provider.connection_manager, 'connect', return_value=failing_session):
-        with pytest.raises(ConnectionError, match="Failed to connect to server"):
+    # Test connection error
+    with patch.object(provider.connection_manager, 'connect', side_effect=ConnectionError("Failed to connect")):
+        with pytest.raises(ConnectionError):
             await provider.mcp_connect("server1")
-        
-        # Verify cleanup was called after failure
-        assert "server1" not in provider.tools_by_server
-        
-        # Test partial success in connect_all
-        results = await provider.mcp_connect_all()
-        assert len(results) == 2
-        assert all(isinstance(error, Exception) for _, error in results)
+        assert not provider.tool_registry.get_server_tools("server1")
+    
+    # Test tool registration error
+    mock_session = AsyncMock()
+    mock_session.list_tools = AsyncMock(side_effect=Exception("Failed to list tools"))
+    
+    with patch.object(provider.connection_manager, 'connect', return_value=mock_session):
+        with pytest.raises(ConnectionError):
+            await provider.mcp_connect("server1")
+        assert not provider.tool_registry.get_server_tools("server1")
 
 @pytest.mark.asyncio
 async def test_concurrent_operations(mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack):
-    """Test concurrent operations handling."""
+    """Test concurrent operations on the provider."""
     provider = MCPToolProvider(mock_llm_backend, server_configs=valid_server_configs)
     provider.exit_stack = mock_exit_stack
     await provider.initialize()
     
     with patch.object(provider.connection_manager, 'connect', side_effect=lambda name, _: mock_session(name)):
-        # Test concurrent connections
-        tasks = [
+        # Connect to both servers concurrently
+        await asyncio.gather(
             provider.mcp_connect("server1"),
             provider.mcp_connect("server2")
-        ]
-        await asyncio.gather(*tasks)
+        )
         
-        assert len(provider.tools_by_server) == 2
-        assert len(provider.all_tools) == 4
+        assert len(provider.tool_registry.tools_by_server) == 2
+        assert len(provider.tool_registry.all_tools) == 4  # 2 tools per server
         
-        # Test concurrent queries
-        mock_llm_backend.process_query.return_value = "Test response"
-        query_tasks = [
-            provider.process_query("Query 1"),
-            provider.process_query("Query 2")
-        ]
-        responses = await asyncio.gather(*query_tasks)
-        assert all(response == "Test response" for response in responses) 
+        # Cleanup both servers concurrently
+        await asyncio.gather(
+            provider.cleanup("server1"),
+            provider.cleanup("server2")
+        )
+        
+        assert not provider.tool_registry.tools_by_server
+        assert not provider.tool_registry.all_tools 

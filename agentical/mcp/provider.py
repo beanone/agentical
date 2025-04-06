@@ -51,7 +51,6 @@ import asyncio
 
 from contextlib import AsyncExitStack
 
-from mcp.types import Tool as MCPTool
 from mcp.types import CallToolResult
 
 from agentical.api import LLMBackend
@@ -77,7 +76,7 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
         MAX_HEARTBEAT_MISS (int): Maximum missed heartbeats before reconnection
         connection_manager (MCPConnectionManager): Manages server connections
         available_servers (Dict[str, ServerConfig]): Available server configurations
-        tool_registry (ToolRegistry): Manages tool registration and lookup
+        tool_registry (ToolRegistry): Registry for managing MCP tools
     """
     
     # Health monitoring settings
@@ -387,8 +386,9 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
             
         finally:
             # Clear all stored references
-            num_tools, num_servers = self.tool_registry.clear()
-            
+            if hasattr(self, 'tool_registry'):
+                num_tools, num_servers = self.tool_registry.clear()
+                
             duration = time.time() - start_time
             logger.info("Provider cleanup completed", extra={
                 "num_tools_cleared": num_tools,
@@ -447,7 +447,7 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
             # Update health monitor
             self.health_monitor.update_heartbeat(server_name)
             
-            # Store MCP tools for this server
+            # Register tools
             self.tool_registry.register_server_tools(server_name, response.tools)
             
             tool_names = [tool.name for tool in response.tools]
