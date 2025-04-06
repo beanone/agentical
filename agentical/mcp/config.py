@@ -91,26 +91,29 @@ class FileBasedMCPConfigProvider:
             logger.error("Error loading configuration: %s", str(e))
             raise ConfigurationError(f"Failed to load configuration: {str(e)}")
 
-class DictBasedMCPConfigProvider:
-    """Provides MCP configuration from a dictionary.
-    
-    This provider implements the MCPConfigProvider protocol for loading
-    configurations from an in-memory dictionary. Useful for testing and
-    direct configuration injection.
-    """
-    
+class DictBasedMCPConfigProvider(MCPConfigProvider):
+    """Configuration provider that loads from a dictionary."""
+
     def __init__(self, config: Dict[str, ServerConfig]):
-        """Initialize with a configuration dictionary.
-        
+        """Initialize with a dictionary configuration.
+
         Args:
-            config: Dictionary mapping server names to configurations
+            config: Dictionary mapping server names to their configurations
         """
-        self.config = config
-    
+        # Create a deep copy of the config to ensure immutability
+        self._config = {
+            name: ServerConfig(**server_config.model_dump())
+            for name, server_config in config.items()
+        }
+
     async def load_config(self) -> Dict[str, ServerConfig]:
-        """Return the stored configuration.
-        
+        """Load configuration from the stored dictionary.
+
         Returns:
-            The stored server configurations dictionary
+            Dict mapping server names to their configurations
         """
-        return self.config 
+        # Return a deep copy to prevent modifications
+        return {
+            name: ServerConfig(**server_config.model_dump())
+            for name, server_config in self._config.items()
+        } 
