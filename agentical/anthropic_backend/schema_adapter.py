@@ -37,8 +37,7 @@ class SchemaAdapter:
     
     def convert_mcp_tools_to_anthropic(self, tools: List[MCPTool]) -> List[Dict[str, Any]]:
         """Convert MCP tools to Anthropic format."""
-        logger.debug("TEST LOG - Starting tool conversion")
-        logger.debug(f"Converting {len(tools)} MCP tools to Anthropic format")
+        logger.debug("Converting MCP tools to Anthropic format", extra={"num_tools": len(tools)})
         formatted_tools = []
         
         for tool in tools:
@@ -57,7 +56,10 @@ class SchemaAdapter:
             # Get and clean the schema from the tool's parameters
             if hasattr(tool, 'parameters'):
                 schema = self.clean_schema(tool.parameters)
-                logger.debug(f"Cleaned schema for {tool.name}: {json.dumps(schema, indent=2)}")
+                logger.debug("Cleaned tool schema", extra={
+                    "tool_name": tool.name,
+                    "schema": schema
+                })
                 
                 # Copy over properties and required fields
                 if "properties" in schema:
@@ -65,10 +67,9 @@ class SchemaAdapter:
                 if "required" in schema:
                     formatted_tool["input_schema"]["required"] = schema["required"]
             
-            logger.debug(f"Formatted tool result: {json.dumps(formatted_tool, indent=2)}")
             formatted_tools.append(formatted_tool)
         
-        logger.debug(f"Converted {len(formatted_tools)} tools successfully")
+        logger.debug("Tool conversion completed", extra={"num_tools": len(formatted_tools)})
         return formatted_tools
     
     def clean_schema(self, schema: Dict[str, Any]) -> Dict[str, Any]:
@@ -100,40 +101,32 @@ class SchemaAdapter:
     @staticmethod
     def create_user_message(query: str) -> MessageParam:
         """Create a user message in Anthropic format."""
-        msg = {
+        return {
             "role": "user",
             "content": [{"type": "text", "text": query}]
         }
-        logger.debug(f"Created user message: {json.dumps(msg, indent=2)}")
-        return msg
 
     @staticmethod
     def create_system_message(content: str) -> List[Dict[str, str]]:
         """Create a system message in Anthropic format."""
-        msg = [{"type": "text", "text": content}]
-        logger.debug(f"Created system message: {json.dumps(msg, indent=2)}")
-        return msg
+        return [{"type": "text", "text": content}]
 
     @staticmethod
     def create_assistant_message(content: str) -> MessageParam:
         """Create an assistant message in Anthropic format."""
-        msg = {
+        return {
             "role": "assistant",
             "content": [{"type": "text", "text": content}]
         }
-        logger.debug(f"Created assistant message: {json.dumps(msg, indent=2)}")
-        return msg
 
     @staticmethod
     def create_tool_response_message(tool_name: str, result: Any = None, error: str = None) -> MessageParam:
         """Create a tool response message in Anthropic format."""
         content = f"Tool {tool_name} returned: {str(result)}" if result else f"Tool {tool_name} error: {error}"
-        msg = {
+        return {
             "role": "user",
             "content": [{"type": "text", "text": content}]
         }
-        logger.debug(f"Created tool response message: {json.dumps(msg, indent=2)}")
-        return msg
 
     @staticmethod
     def extract_tool_calls(response: Message) -> List[Tuple[str, Dict[str, Any]]]:
@@ -141,15 +134,9 @@ class SchemaAdapter:
         tool_calls = []
         
         if hasattr(response, 'content'):
-            logger.debug(f"Processing response content blocks: {len(response.content)} blocks")
+            logger.debug("Processing response content", extra={"num_blocks": len(response.content)})
             for block in response.content:
-                logger.debug(f"Processing content block type: {block.type}")
                 if block.type == "tool_use":
-                    logger.debug(f"Found tool_use block: {json.dumps(block.dict(), indent=2)}")
-                    tool_calls.append((
-                        block.name,
-                        block.input
-                    ))
+                    tool_calls.append((block.name, block.input))
         
-        logger.debug(f"Extracted {len(tool_calls)} tool calls")
         return tool_calls 

@@ -3,12 +3,14 @@
 import json
 import logging
 import os
+import time
 from typing import Any, Dict, List, Optional, Callable
 
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletion
 
 from agentical.api.llm_backend import LLMBackend
+from agentical.utils.log_utils import redact_sensitive_data, sanitize_log_message
 from mcp.types import Tool as MCPTool
 from mcp.types import CallToolResult
 
@@ -32,6 +34,7 @@ class OpenAIBackend(LLMBackend):
             OPENAI_API_KEY: API key for OpenAI
             OPENAI_MODEL: Model to use (defaults to DEFAULT_MODEL if not set)
         """
+        logger.info("Initializing OpenAI backend")
         api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OPENAI_API_KEY not found. Please provide it or set in environment.")
@@ -39,8 +42,14 @@ class OpenAIBackend(LLMBackend):
         try:
             self.client = AsyncOpenAI(api_key=api_key)
             self.model = os.getenv("OPENAI_MODEL", self.DEFAULT_MODEL)
+            logger.info("Initialized OpenAI client", extra=redact_sensitive_data({
+                "model": self.model,
+                "api_key_length": len(api_key)
+            }))
         except Exception as e:
-            raise ValueError(f"Failed to initialize OpenAI client: {str(e)}")
+            error_msg = sanitize_log_message(f"Failed to initialize OpenAI client: {str(e)}")
+            logger.error(error_msg, exc_info=True)
+            raise ValueError(error_msg)
 
     def _format_tools(self, tools: List[MCPTool]) -> List[Dict[str, Any]]:
         """Format tools for OpenAI's function calling format.
@@ -51,23 +60,44 @@ class OpenAIBackend(LLMBackend):
         Returns:
             List of tools in OpenAI function format
         """
+        start_time = time.time()
         formatted_tools = []
-        for tool in tools:
-            # Get the tool's schema directly from the MCP Tool
-            schema = tool.parameters if hasattr(tool, 'parameters') else {}
-            
-            # Create OpenAI function format
-            formatted_tool = {
-                "type": "function",
-                "function": {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "parameters": schema
-                }
-            }
-            formatted_tools.append(formatted_tool)
         
-        return formatted_tools
+        try:
+            for tool in tools:
+                # Get the tool's schema directly from the MCP Tool
+                schema = tool.parameters if hasattr(tool, 'parameters') else {}
+                
+                # Create OpenAI function format
+                formatted_tool = {
+                    "type": "function",
+                    "function": {
+                        "name": tool.name,
+                        "description": tool.description,
+                        "parameters": schema
+                    }
+                }
+                formatted_tools.append(formatted_tool)
+                
+                logger.debug("Formatted tool", extra={
+                    "tool_name": tool.name,
+                    "has_parameters": bool(schema)
+                })
+            
+            duration = time.time() - start_time
+            logger.debug("Tool formatting completed", extra={
+                "num_tools": len(tools),
+                "duration_ms": int(duration * 1000)
+            })
+            return formatted_tools
+            
+        except Exception as e:
+            duration = time.time() - start_time
+            logger.error("Tool formatting failed", extra={
+                "error": str(e),
+                "duration_ms": int(duration * 1000)
+            })
+            raise
 
     async def process_query(
         self,
@@ -90,7 +120,14 @@ class OpenAIBackend(LLMBackend):
         Raises:
             ValueError: If there's an error communicating with OpenAI
         """
+        start_time = time.time()
         try:
+            logger.info("Processing query", extra=redact_sensitive_data({
+                "query": query,
+                "num_tools": len(tools),
+                "has_context": context is not None
+            }))
+            
             # Initialize or use existing conversation context
             messages = list(context) if context else []
             messages.append({"role": "user", "content": query})
@@ -100,17 +137,26 @@ class OpenAIBackend(LLMBackend):
             
             while True:  # Continue until we get a response without tool calls
                 # Get response from OpenAI
+                api_start = time.time()
                 response = await self.client.chat.completions.create(
                     model=self.model,
                     messages=messages,
                     tools=formatted_tools,
                     tool_choice="auto"
                 )
+                api_duration = time.time() - api_start
+                logger.debug("OpenAI API call completed", extra={
+                    "duration_ms": int(api_duration * 1000)
+                })
                 
                 message = response.choices[0].message
                 
                 # If no tool calls, return the final response
                 if not message.tool_calls:
+                    duration = time.time() - start_time
+                    logger.info("Query completed without tool calls", extra={
+                        "duration_ms": int(duration * 1000)
+                    })
                     return message.content or "No response generated"
                 
                 # Handle each tool call
@@ -119,14 +165,29 @@ class OpenAIBackend(LLMBackend):
                     try:
                         function_args = json.loads(tool_call.function.arguments)
                     except json.JSONDecodeError as e:
-                        logger.error(f"Failed to parse tool arguments: {e}")
+                        logger.error("Failed to parse tool arguments", extra={
+                            "error": str(e),
+                            "tool_name": function_name,
+                            "raw_args": sanitize_log_message(tool_call.function.arguments)
+                        })
                         continue
                     
                     # Execute the tool
+                    tool_start = time.time()
                     try:
                         function_response = await execute_tool(function_name, function_args)
+                        tool_duration = time.time() - tool_start
+                        logger.debug("Tool execution completed", extra={
+                            "tool_name": function_name,
+                            "duration_ms": int(tool_duration * 1000)
+                        })
                     except Exception as e:
-                        logger.error(f"Tool execution failed: {str(e)}")
+                        tool_duration = time.time() - tool_start
+                        logger.error("Tool execution failed", extra={
+                            "tool_name": function_name,
+                            "error": sanitize_log_message(str(e)),
+                            "duration_ms": int(tool_duration * 1000)
+                        })
                         function_response = f"Error: {str(e)}"
                     
                     # Add tool call and response to conversation
@@ -150,10 +211,21 @@ class OpenAIBackend(LLMBackend):
                         "content": str(function_response)
                     })
                 
-                # Continue the loop to let the model make more tool calls if needed
+                # Continue the loop to let the model make more tool calls
             
         except Exception as e:
-            raise ValueError(f"Error in OpenAI conversation: {str(e)}")
+            duration = time.time() - start_time
+            error_msg = sanitize_log_message(f"Error in OpenAI conversation: {str(e)}")
+            logger.error(error_msg, extra={
+                "error": str(e),
+                "duration_ms": int(duration * 1000)
+            }, exc_info=True)
+            raise ValueError(error_msg)
+        finally:
+            duration = time.time() - start_time
+            logger.info("Query processing completed", extra={
+                "duration_ms": int(duration * 1000)
+            })
 
     def convert_tools(self, tools: List[MCPTool]) -> List[Dict[str, Any]]:
         """Convert MCP tools to OpenAI format.

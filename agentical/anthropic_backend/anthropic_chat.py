@@ -3,12 +3,14 @@
 import json
 import logging
 import os
+import time
 import traceback
 from typing import Any, Dict, List, Optional, Callable
 
 from anthropic import AsyncAnthropic
 
 from agentical.api.llm_backend import LLMBackend
+from agentical.utils.log_utils import redact_sensitive_data, sanitize_log_message
 from mcp.types import Tool as MCPTool
 from mcp.types import CallToolResult
 
@@ -34,7 +36,7 @@ class AnthropicBackend(LLMBackend):
             ANTHROPIC_API_KEY: API key for Anthropic
             ANTHROPIC_MODEL: Model to use (defaults to DEFAULT_MODEL if not set)
         """
-        logger.debug("Initializing Anthropic backend")
+        logger.info("Initializing Anthropic backend")
         api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
             raise ValueError("ANTHROPIC_API_KEY not found. Please provide it or set in environment.")
@@ -43,10 +45,13 @@ class AnthropicBackend(LLMBackend):
             self.client = AsyncAnthropic(api_key=api_key)
             self.model = os.getenv("ANTHROPIC_MODEL", self.DEFAULT_MODEL)
             self.schema_adapter = SchemaAdapter()
-            logger.debug(f"Initialized Anthropic client with model: {self.model}")
+            logger.info("Initialized Anthropic client", extra=redact_sensitive_data({
+                "model": self.model,
+                "api_key_length": len(api_key)
+            }))
         except Exception as e:
-            error_msg = f"Failed to initialize Anthropic client: {str(e)}"
-            logger.error(error_msg)
+            error_msg = sanitize_log_message(f"Failed to initialize Anthropic client: {str(e)}")
+            logger.error(error_msg, exc_info=True)
             raise ValueError(error_msg)
 
     def convert_tools(self, tools: List[MCPTool]) -> List[Dict[str, Any]]:
@@ -81,7 +86,13 @@ class AnthropicBackend(LLMBackend):
         Raises:
             ValueError: If there's an error communicating with Anthropic
         """
+        start_time = time.time()
         try:
+            logger.info("Processing query", extra=redact_sensitive_data({
+                "query": query,
+                "num_tools": len(tools),
+                "has_context": context is not None
+            }))
             # Initialize or use existing conversation context
             messages = list(context) if context else []
             
@@ -147,7 +158,13 @@ class AnthropicBackend(LLMBackend):
                 for tool_name, tool_params in tool_calls:
                     try:
                         # Execute the tool
+                        tool_start_time = time.time()
                         tool_response = await execute_tool(tool_name, tool_params)
+                        tool_duration = time.time() - tool_start_time
+                        logger.debug("Tool execution completed", extra={
+                            "tool_name": tool_name,
+                            "duration_ms": int(tool_duration * 1000)
+                        })
                         
                         # Add tool call and response to messages
                         anthropic_messages.append(
@@ -162,7 +179,13 @@ class AnthropicBackend(LLMBackend):
                             )
                         )
                     except Exception as e:
-                        logger.error(f"Tool execution failed: {str(e)}")
+                        tool_duration = time.time() - tool_start_time
+                        logger.error("Tool execution failed", extra={
+                            "tool_name": tool_name,
+                            "error": sanitize_log_message(str(e)),
+                            "duration_ms": int(tool_duration * 1000),
+                            "traceback": traceback.format_exc()
+                        })
                         anthropic_messages.append(
                             self.schema_adapter.create_tool_response_message(
                                 tool_name=tool_name,
@@ -173,6 +196,15 @@ class AnthropicBackend(LLMBackend):
                 # Continue the loop to handle more tool calls
                 
         except Exception as e:
-            logger.error(f"Error in Anthropic conversation: {str(e)}")
-            logger.error(f"Stacktrace: {traceback.format_exc()}")
-            raise ValueError(f"Error in Anthropic conversation: {str(e)}") 
+            duration = time.time() - start_time
+            logger.error("Error in Anthropic conversation", extra={
+                "error": sanitize_log_message(str(e)),
+                "duration_ms": int(duration * 1000),
+                "traceback": traceback.format_exc()
+            })
+            raise ValueError(f"Error in Anthropic conversation: {str(e)}")
+        finally:
+            duration = time.time() - start_time
+            logger.info("Query processing completed", extra={
+                "duration_ms": int(duration * 1000)
+            }) 
