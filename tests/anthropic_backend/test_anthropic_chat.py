@@ -56,15 +56,11 @@ def test_init_with_env_vars(mock_env_vars, mock_anthropic_client):
 @pytest.fixture
 def mock_env_vars():
     """Fixture to set and cleanup environment variables."""
-    print("\n=== Setting up mock_env_vars fixture ===")
-    print(f"Current env before patch: ANTHROPIC_API_KEY={os.environ.get('ANTHROPIC_API_KEY')}")
     with patch.dict(os.environ, {
         'ANTHROPIC_API_KEY': 'test_key',
         'ANTHROPIC_MODEL': 'test_model'
     }, clear=True):
-        print(f"Environment patched: ANTHROPIC_API_KEY={os.environ.get('ANTHROPIC_API_KEY')}")
         yield
-    print("=== Tearing down mock_env_vars fixture ===")
 
 @pytest.fixture
 def mock_mcp_tools():

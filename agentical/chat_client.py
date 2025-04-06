@@ -69,15 +69,6 @@ async def chat_loop(provider: MCPToolProvider):
                 }, exc_info=True)
                 print(f"\nError processing query: {str(e)}")
     finally:
-        # Ensure cleanup happens before ending the session
-        logger.info("Starting chat session cleanup")
-        try:
-            await provider.cleanup()
-        except Exception as e:
-            logger.error("Error during chat session cleanup", extra={
-                "error": sanitize_log_message(str(e))
-            })
-        
         session_duration = time.time() - start_time
         logger.info("Chat session ended", extra={
             "total_queries": query_count,
@@ -153,16 +144,19 @@ async def interactive_server_selection(provider: MCPToolProvider) -> str | None:
 
 async def run_demo(llm_backend: LLMBackend):
     """Main function to test MCPToolProvider functionality."""
+    print("\nStarting run_demo function")
     start_time = time.time()
     logger.info("Starting MCP Tool Provider demo", extra={
         "llm_backend_type": type(llm_backend).__name__
     })
     
     # Parse command line arguments
+    print("Parsing arguments")
     args = parse_arguments()
     config_path = args.config
     
     # Check if configuration file exists
+    print("Checking config file")
     if not Path(config_path).exists():
         logger.error("Configuration file not found", extra={
             "config_path": config_path
@@ -173,6 +167,7 @@ async def run_demo(llm_backend: LLMBackend):
         sys.exit(1)
     
     # Initialize provider with the LLM backend and config
+    print("Creating provider")
     logger.debug("Initializing provider", extra={
         "config_path": config_path,
         "llm_backend_type": type(llm_backend).__name__
@@ -181,92 +176,50 @@ async def run_demo(llm_backend: LLMBackend):
     provider = MCPToolProvider(llm_backend=llm_backend, config_provider=config_provider)
     
     try:
-        # Initialize provider and load configurations
-        logger.info("Loading configurations", extra={
-            "config_path": config_path
-        })
+        print("Initializing provider")
+        # Initialize provider
         await provider.initialize()
-        num_servers = len(provider.available_servers)
-        logger.info("Configurations loaded", extra={
-            "num_servers": num_servers
-        })
-        print(f"\nLoaded {num_servers} servers")
+        print("Provider initialized")
         
-        # Let user select server
+        print("Starting server selection")
+        # Let user select server(s)
         selected_server = await interactive_server_selection(provider)
+        print(f"Server selected: {selected_server}")
         
-        # Connect to selected server(s)
-        connection_start = time.time()
-        if selected_server is None:
-            # Connect to all servers
-            logger.info("Connecting to all servers")
-            print("\nConnecting to all servers...")
-            results = await provider.mcp_connect_all()
-            
-            # Print connection results
-            success_count = 0
-            for server_name, error in results:
-                if error:
-                    logger.error("Server connection failed", extra={
-                        "server_name": server_name,
-                        "error": sanitize_log_message(str(error))
-                    })
-                    print(f"Failed to connect to {server_name}: {error}")
-                else:
-                    logger.info("Server connection successful", extra={
-                        "server_name": server_name
-                    })
-                    print(f"Successfully connected to {server_name}")
-                    success_count += 1
-                    
-            # Check if at least one connection was successful
-            if success_count == 0:
-                connection_duration = time.time() - connection_start
-                logger.error("All connections failed", extra={
-                    "num_servers": len(results),
-                    "duration_ms": int(connection_duration * 1000)
-                })
-                raise Exception("Failed to connect to any servers")
-                
-            connection_duration = time.time() - connection_start
-            logger.info("Server connections completed", extra={
-                "successful": success_count,
-                "failed": len(results) - success_count,
-                "duration_ms": int(connection_duration * 1000)
-            })
-        else:
-            # Connect to single selected server
-            logger.info("Connecting to server", extra={
-                "server_name": selected_server
-            })
+        if selected_server:
+            # Connect to single server
+            print(f"Connecting to single server: {selected_server}")
             await provider.mcp_connect(selected_server)
-            connection_duration = time.time() - connection_start
-            logger.info("Server connection successful", extra={
-                "server_name": selected_server,
-                "duration_ms": int(connection_duration * 1000)
-            })
-        
+            print("Connected to server")
+        else:
+            # Connect to all servers
+            print("Connecting to all servers")
+            await provider.mcp_connect_all()
+            print("Connected to all servers")
+            
+        print("Starting chat loop")
         # Start chat loop
         await chat_loop(provider)
+        print("Chat loop completed")
         
     except Exception as e:
-        duration = time.time() - start_time
-        logger.error("Demo execution failed", extra={
-            "error": sanitize_log_message(str(e)),
-            "duration_ms": int(duration * 1000)
-        })
+        print(f"Error occurred: {str(e)}")
+        logger.error("Error during demo execution", extra={
+            "error": sanitize_log_message(str(e))
+        }, exc_info=True)
+        print(f"\nError: {str(e)}")
         raise
     finally:
-        # Ensure cleanup happens before exiting
-        logger.info("Starting demo cleanup")
-        try:
-            await provider.cleanup()
-        except Exception as e:
-            logger.error("Error during demo cleanup", extra={
-                "error": sanitize_log_message(str(e))
-            })
+        print("Starting cleanup")
+        # Always perform cleanup, but check if we need to log it
+        # This avoids double cleanup messages while ensuring cleanup happens
+        if sys.exc_info()[0] is not None:
+            logger.info("Starting demo cleanup after error")
+        await provider.cleanup()
+        print("Cleanup completed")
         
-        duration = time.time() - start_time
-        logger.info("Demo execution completed", extra={
-            "duration_ms": int(duration * 1000)
-        })
+    duration = time.time() - start_time
+    logger.info("Demo execution completed", extra={
+        "duration_ms": int(duration * 1000)
+    })
+    print("run_demo completed")

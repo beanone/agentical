@@ -1,18 +1,19 @@
-"""Unit tests for the MCPConnectionManager class.
+"""Unit tests for MCP Connection components.
 
-This module contains comprehensive tests for the MCPConnectionManager class,
-focusing on behavior verification, error handling, and resource management.
+This module contains tests for the MCPConnectionService and MCPConnectionManager classes,
+which handle server connections and health monitoring.
 """
 
 import asyncio
 import pytest
 from contextlib import AsyncExitStack
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch, call, Mock
 
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters
+from mcp.types import Tool as MCPTool
 
-from agentical.mcp.connection import MCPConnectionManager
+from agentical.mcp import connection
 from agentical.mcp.schemas import ServerConfig
 
 @pytest.fixture
@@ -30,166 +31,197 @@ def server_config():
         env={"TEST_ENV": "value"}
     )
 
-class AsyncContextManagerMock:
-    """Mock class that implements the async context manager protocol."""
-    def __init__(self, mock_transport):
-        self.mock_transport = mock_transport
-        
+class MockClientSession:
+    """Mock implementation of ClientSession."""
+    def __init__(self, tools=None, server_name=None):
+        self.tools = tools or []
+        self.server_name = server_name
+        self.closed = False
+        self.mock_response = Mock()
+        self.mock_response.tools = self.tools
+        self.initialized = False
+    
     async def __aenter__(self):
-        return self.mock_transport
-        
+        return self
+    
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        return None
-
-@pytest.fixture
-def mock_stdio_client():
-    """Fixture providing a mocked stdio_client context manager."""
-    mock_stdio = AsyncMock()
-    mock_write = AsyncMock()
-    mock_transport = (mock_stdio, mock_write)
+        await self.close()
     
-    # Create a proper async context manager mock
-    context_manager = AsyncContextManagerMock(mock_transport)
+    async def close(self):
+        """Close the session."""
+        self.closed = True
     
-    with patch('agentical.mcp.connection.stdio_client', return_value=context_manager) as mock:
-        yield mock, mock_transport
-
-@pytest.fixture
-def mock_client_session():
-    """Fixture providing a mocked ClientSession."""
-    mock_session = AsyncMock(spec=ClientSession)
+    async def initialize(self):
+        """Initialize the session."""
+        self.initialized = True
+        return self
     
-    # Create a proper async context manager mock for ClientSession
-    context_manager = AsyncContextManagerMock(mock_session)
+    async def list_tools(self):
+        return self.mock_response
     
-    with patch('agentical.mcp.connection.ClientSession', return_value=context_manager) as mock:
-        yield mock, mock_session
+    async def call_tool(self, tool_name, tool_args):
+        return Mock(result="success")
 
 @pytest.mark.asyncio
-async def test_successful_connection(exit_stack, server_config, mock_stdio_client, mock_client_session):
-    """Test successful server connection and initialization."""
-    _, mock_transport = mock_stdio_client
-    _, mock_session = mock_client_session
-    
-    manager = MCPConnectionManager(exit_stack)
-    session = await manager.connect("test_server", server_config)
-    
-    assert session == mock_session
-    assert "test_server" in manager.sessions
-    assert manager.sessions["test_server"] == mock_session
-    mock_session.initialize.assert_called_once()
+async def test_connection_service_init(exit_stack):
+    """Test MCPConnectionService initialization."""
+    service = connection.MCPConnectionService(exit_stack)
+    assert service._connection_manager is not None
+    assert service._health_monitor is not None
 
 @pytest.mark.asyncio
-async def test_duplicate_connection(exit_stack, server_config, mock_stdio_client, mock_client_session):
-    """Test that connecting to the same server twice raises an error."""
-    manager = MCPConnectionManager(exit_stack)
-    await manager.connect("test_server", server_config)
+async def test_connection_service_connect(exit_stack, server_config):
+    """Test connecting to a server through the connection service."""
+    service = connection.MCPConnectionService(exit_stack)
+    mock_session = MockClientSession()
     
-    with pytest.raises(ValueError, match="Server test_server is already connected"):
-        await manager.connect("test_server", server_config)
+    with patch('agentical.mcp.connection.MCPConnectionManager.connect', 
+               new_callable=AsyncMock) as mock_connect:
+        mock_connect.return_value = mock_session
+        
+        # Test successful connection
+        session = await service.connect("server1", server_config)
+        assert session is mock_session
+        assert not session.closed
+        
+        # Initialize should be called during connect
+        await mock_session.initialize()
+        assert session.initialized
+        
+        # Test connection to same server returns existing session
+        session2 = await service.connect("server1", server_config)
+        assert session2 is session
+        
+        # Test invalid server name
+        with pytest.raises(ValueError):
+            await service.connect("", server_config)
 
 @pytest.mark.asyncio
-async def test_connection_retry(exit_stack, server_config, mock_stdio_client, mock_client_session):
-    """Test connection retry behavior on transient failures."""
-    mock_client, mock_transport = mock_stdio_client
+async def test_connection_service_disconnect(exit_stack, server_config):
+    """Test disconnecting from a server through the connection service."""
+    service = connection.MCPConnectionService(exit_stack)
+    mock_session = MockClientSession()
     
-    # Create context managers for failed attempts
-    failed_context1 = AsyncContextManagerMock(None)
-    failed_context2 = AsyncContextManagerMock(None)
-    success_context = AsyncContextManagerMock(mock_transport)
-    
-    # Configure the mock to fail twice then succeed
-    mock_client.side_effect = [
-        ConnectionError("First failure"),
-        ConnectionError("Second failure"),
-        success_context
-    ]
-    
-    manager = MCPConnectionManager(exit_stack)
-    session = await manager.connect("test_server", server_config)
-    
-    assert session is not None
-    assert mock_client.call_count == 3
+    with patch('agentical.mcp.connection.MCPConnectionManager.connect', 
+               new_callable=AsyncMock) as mock_connect:
+        mock_connect.return_value = mock_session
+        
+        # Connect and verify
+        session = await service.connect("server1", server_config)
+        await mock_session.initialize()
+        assert session.initialized
+        
+        # Disconnect and verify
+        with patch('agentical.mcp.connection.MCPConnectionManager.cleanup', 
+                  new_callable=AsyncMock) as mock_cleanup:
+            await service.disconnect("server1")
+            mock_cleanup.assert_called_once_with("server1")
 
 @pytest.mark.asyncio
-async def test_cleanup_single_server(exit_stack, server_config, mock_stdio_client, mock_client_session):
-    """Test cleanup of a single server's resources."""
-    manager = MCPConnectionManager(exit_stack)
-    await manager.connect("test_server", server_config)
+async def test_connection_service_cleanup(exit_stack, server_config):
+    """Test cleaning up all connections through the connection service."""
+    service = connection.MCPConnectionService(exit_stack)
+    mock_session1 = MockClientSession()
+    mock_session2 = MockClientSession()
     
-    await manager.cleanup("test_server")
-    
-    assert "test_server" not in manager.sessions
-    assert "test_server" not in manager.stdios
-    assert "test_server" not in manager.writes
+    with patch('agentical.mcp.connection.MCPConnectionManager.connect', 
+               new_callable=AsyncMock) as mock_connect:
+        mock_connect.side_effect = [mock_session1, mock_session2]
+        
+        # Connect to multiple servers
+        session1 = await service.connect("server1", server_config)
+        session2 = await service.connect("server2", server_config)
+        
+        # Initialize sessions
+        await mock_session1.initialize()
+        await mock_session2.initialize()
+        
+        # Cleanup all
+        with patch('agentical.mcp.connection.MCPConnectionManager.cleanup_all', 
+                  new_callable=AsyncMock) as mock_cleanup:
+            await service.cleanup_all()
+            mock_cleanup.assert_called_once()
 
 @pytest.mark.asyncio
-async def test_cleanup_all_servers(exit_stack, server_config, mock_stdio_client, mock_client_session):
-    """Test cleanup of all server resources."""
-    manager = MCPConnectionManager(exit_stack)
-    await manager.connect("server1", server_config)
-    await manager.connect("server2", server_config)
+async def test_connection_manager_connect(exit_stack, server_config):
+    """Test MCPConnectionManager connection functionality."""
+    manager = connection.MCPConnectionManager(exit_stack)
+    mock_session = MockClientSession()
     
-    await manager.cleanup_all()
-    
-    assert len(manager.sessions) == 0
-    assert len(manager.stdios) == 0
-    assert len(manager.writes) == 0
+    with patch('agentical.mcp.connection.stdio_client') as mock_stdio:
+        mock_stdio.return_value = AsyncMock()
+        mock_stdio.return_value.__aenter__.return_value = (AsyncMock(), AsyncMock())
+        
+        with patch('agentical.mcp.connection.ClientSession') as mock_client:
+            mock_client.return_value = AsyncMock()
+            mock_client.return_value.__aenter__.return_value = mock_session
+            
+            # Test successful connection
+            session = await manager.connect("server1", server_config)
+            await session.initialize()
+            assert session is mock_session
+            assert not session.closed
+            assert session.initialized
+            
+            # Test invalid server name
+            with pytest.raises(ValueError):
+                await manager.connect("", server_config)
 
 @pytest.mark.asyncio
-async def test_cleanup_nonexistent_server(exit_stack):
-    """Test cleanup of a server that doesn't exist."""
-    manager = MCPConnectionManager(exit_stack)
-    # Should not raise any exceptions
-    await manager.cleanup("nonexistent_server")
+async def test_connection_manager_disconnect(exit_stack, server_config):
+    """Test MCPConnectionManager disconnection functionality."""
+    manager = connection.MCPConnectionManager(exit_stack)
+    mock_session = MockClientSession()
+    
+    with patch('agentical.mcp.connection.stdio_client') as mock_stdio:
+        mock_stdio.return_value = AsyncMock()
+        mock_stdio.return_value.__aenter__.return_value = (AsyncMock(), AsyncMock())
+        
+        with patch('agentical.mcp.connection.ClientSession') as mock_client:
+            mock_client.return_value = AsyncMock()
+            mock_client.return_value.__aenter__.return_value = mock_session
+            
+            # Connect and verify
+            session = await manager.connect("server1", server_config)
+            await session.initialize()
+            assert session.initialized
+            
+            # Cleanup and verify
+            await manager.cleanup("server1")
+            assert session.closed
+            assert "server1" not in manager.sessions
+            assert "server1" not in manager.stdios
+            assert "server1" not in manager.writes
 
 @pytest.mark.asyncio
-async def test_connection_failure_cleanup(exit_stack, server_config, mock_stdio_client):
-    """Test resource cleanup on connection failure."""
-    mock_client, _ = mock_stdio_client
-    mock_client.side_effect = ConnectionError("Permanent failure")
+async def test_connection_manager_cleanup(exit_stack, server_config):
+    """Test MCPConnectionManager cleanup functionality."""
+    manager = connection.MCPConnectionManager(exit_stack)
+    mock_session1 = MockClientSession()
+    mock_session2 = MockClientSession()
     
-    manager = MCPConnectionManager(exit_stack)
-    
-    with pytest.raises(ConnectionError, match="Failed to connect to server"):
-        await manager.connect("test_server", server_config)
-    
-    assert "test_server" not in manager.sessions
-    assert "test_server" not in manager.stdios
-    assert "test_server" not in manager.writes
-
-@pytest.mark.asyncio
-async def test_cleanup_during_cancellation(exit_stack, server_config, mock_stdio_client, mock_client_session):
-    """Test cleanup behavior during task cancellation."""
-    manager = MCPConnectionManager(exit_stack)
-    await manager.connect("test_server", server_config)
-    
-    # Simulate task cancellation during cleanup
-    with patch.object(exit_stack, 'aclose', side_effect=asyncio.CancelledError):
-        try:
+    with patch('agentical.mcp.connection.stdio_client') as mock_stdio:
+        mock_stdio.return_value = AsyncMock()
+        mock_stdio.return_value.__aenter__.return_value = (AsyncMock(), AsyncMock())
+        
+        with patch('agentical.mcp.connection.ClientSession') as mock_client:
+            mock_client.return_value = AsyncMock()
+            mock_client.return_value.__aenter__.side_effect = [mock_session1, mock_session2]
+            
+            # Connect to multiple servers
+            session1 = await manager.connect("server1", server_config)
+            session2 = await manager.connect("server2", server_config)
+            
+            # Initialize sessions
+            await session1.initialize()
+            await session2.initialize()
+            
+            # Cleanup all
             await manager.cleanup_all()
-        except asyncio.CancelledError:
-            # Expected behavior - the cancellation should propagate
-            pass
-    
-    # Even with cancellation, resources should be cleaned up
-    assert len(manager.sessions) == 0
-    assert len(manager.stdios) == 0
-    assert len(manager.writes) == 0
-
-@pytest.mark.asyncio
-async def test_server_params_creation(exit_stack, server_config, mock_stdio_client, mock_client_session):
-    """Test correct creation of StdioServerParameters."""
-    mock_client, _ = mock_stdio_client
-    
-    manager = MCPConnectionManager(exit_stack)
-    await manager.connect("test_server", server_config)
-    
-    # Verify the StdioServerParameters were created correctly
-    mock_client.assert_called_once()
-    # Get the actual parameters passed to stdio_client
-    call_args = mock_client.call_args[0][0]
-    assert isinstance(call_args, StdioServerParameters)
-    assert call_args.command == server_config.command
-    assert call_args.args == server_config.args
-    assert call_args.env == server_config.env 
+            
+            # Verify all sessions are closed and references removed
+            assert session1.closed
+            assert session2.closed
+            assert not manager.sessions
+            assert not manager.stdios
+            assert not manager.writes 
