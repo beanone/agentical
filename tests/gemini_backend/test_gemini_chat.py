@@ -79,6 +79,49 @@ def test_init_with_invalid_api_key(mock_genai_client):
     with pytest.raises(ValueError, match="Failed to initialize Gemini client"):
         GeminiBackend(api_key="invalid_key")
 
+def test_convert_tools_success(mock_env_vars, mock_mcp_tools):
+    """Test successful conversion of MCP tools to Gemini format."""
+    backend = GeminiBackend()
+    result = backend.convert_tools(mock_mcp_tools)
+    
+    assert isinstance(result, list)
+    assert len(result) == len(mock_mcp_tools)
+    for tool in result:
+        assert isinstance(tool, genai.types.Tool)
+        assert len(tool.function_declarations) == 1
+        func_decl = tool.function_declarations[0]
+        assert isinstance(func_decl, genai.types.FunctionDeclaration)
+        assert func_decl.name in ["tool1", "tool2"]
+        assert isinstance(func_decl.parameters, genai.types.Schema)
+
+def test_convert_tools_empty_list(mock_env_vars):
+    """Test conversion of empty tools list."""
+    backend = GeminiBackend()
+    result = backend.convert_tools([])
+    
+    assert isinstance(result, list)
+    assert len(result) == 0
+
+def test_convert_tools_error(mock_env_vars, mock_mcp_tools):
+    """Test error handling during tool conversion."""
+    backend = GeminiBackend()
+    
+    # Create an invalid tool that will cause conversion to fail
+    invalid_tool = MCPTool(
+        name="invalid_tool",
+        description="Invalid tool",
+        parameters={},
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "param": {"type": "string", "enum": [1, 2, 3]}  # Type mismatch in enum values
+            }
+        }
+    )
+    
+    with pytest.raises(ValueError):  # Gemini's FunctionDeclaration raises ValueError for invalid schemas
+        backend.convert_tools([invalid_tool])
+
 @pytest.mark.asyncio
 async def test_process_query_without_tool_calls(mock_env_vars, mock_genai_client, mock_mcp_tools):
     """Test processing a query that doesn't require tool calls."""
