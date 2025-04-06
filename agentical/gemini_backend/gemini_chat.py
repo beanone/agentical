@@ -30,13 +30,20 @@ class GeminiBackend(LLMBackend):
             GEMINI_API_KEY: API key for Gemini
             GEMINI_MODEL: Model to use (defaults to DEFAULT_MODEL if not set)
         """
+        logger.info("Initializing Gemini backend")
         api_key = api_key or os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise ValueError("GEMINI_API_KEY not found. Please provide it or set in environment.")
             
-        self.client = genai.Client(api_key=api_key)
-        self.model = os.getenv("GEMINI_MODEL", self.DEFAULT_MODEL)
-        self.schema_adapter = SchemaAdapter()
+        try:
+            self.client = genai.Client(api_key=api_key)
+            self.model = os.getenv("GEMINI_MODEL", self.DEFAULT_MODEL)
+            self.schema_adapter = SchemaAdapter()
+            logger.info("Initialized Gemini client", extra={"model": self.model})
+        except Exception as e:
+            error_msg = f"Failed to initialize Gemini client: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            raise ValueError(error_msg)
 
     def convert_tools(self, tools: List[MCPTool]) -> List[Dict[str, Any]]:
         """Convert MCP tools to Gemini format.
@@ -54,7 +61,7 @@ class GeminiBackend(LLMBackend):
         query: str,
         tools: List[MCPTool],
         execute_tool: Callable[[str, Dict[str, Any]], CallToolResult],
-        context: Optional[List[Content]] = None
+        context: Optional[List[Dict[str, Any]]] = None
     ) -> str:
         """Process a query using Gemini with the given tools.
         
@@ -68,6 +75,7 @@ class GeminiBackend(LLMBackend):
             Generated response from Gemini
         """
         try:
+            logger.info("Processing query", extra={"query": query, "num_tools": len(tools)})
             # Convert query to Gemini format and prepare contents
             contents = context or []
             contents.append(self.schema_adapter.create_user_content(query))
@@ -114,7 +122,10 @@ class GeminiBackend(LLMBackend):
                                     )
                                 )
                             except Exception as e:
-                                logger.error("Tool execution failed: %s", str(e))
+                                logger.error("Tool execution failed", extra={
+                                    "tool_name": tool_name,
+                                    "error": str(e)
+                                })
                                 contents.extend(
                                     self.schema_adapter.create_tool_response_content(
                                         function_call_part=part,
@@ -132,5 +143,6 @@ class GeminiBackend(LLMBackend):
                 # Continue the loop to handle more tool calls
                 
         except Exception as e:
-            logger.error("Error in Gemini conversation: %s", str(e))
-            raise ValueError(f"Error in Gemini conversation: {str(e)}") 
+            error_msg = f"Error in Gemini conversation: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            raise ValueError(error_msg) 

@@ -32,6 +32,7 @@ class OpenAIBackend(LLMBackend):
             OPENAI_API_KEY: API key for OpenAI
             OPENAI_MODEL: Model to use (defaults to DEFAULT_MODEL if not set)
         """
+        logger.info("Initializing OpenAI backend")
         api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OPENAI_API_KEY not found. Please provide it or set in environment.")
@@ -39,8 +40,11 @@ class OpenAIBackend(LLMBackend):
         try:
             self.client = AsyncOpenAI(api_key=api_key)
             self.model = os.getenv("OPENAI_MODEL", self.DEFAULT_MODEL)
+            logger.info("Initialized OpenAI client", extra={"model": self.model})
         except Exception as e:
-            raise ValueError(f"Failed to initialize OpenAI client: {str(e)}")
+            error_msg = f"Failed to initialize OpenAI client: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            raise ValueError(error_msg)
 
     def _format_tools(self, tools: List[MCPTool]) -> List[Dict[str, Any]]:
         """Format tools for OpenAI's function calling format.
@@ -91,6 +95,7 @@ class OpenAIBackend(LLMBackend):
             ValueError: If there's an error communicating with OpenAI
         """
         try:
+            logger.info("Processing query", extra={"query": query, "num_tools": len(tools)})
             # Initialize or use existing conversation context
             messages = list(context) if context else []
             messages.append({"role": "user", "content": query})
@@ -119,14 +124,20 @@ class OpenAIBackend(LLMBackend):
                     try:
                         function_args = json.loads(tool_call.function.arguments)
                     except json.JSONDecodeError as e:
-                        logger.error(f"Failed to parse tool arguments: {e}")
+                        logger.error("Failed to parse tool arguments", extra={
+                            "error": str(e),
+                            "tool_name": function_name
+                        })
                         continue
                     
                     # Execute the tool
                     try:
                         function_response = await execute_tool(function_name, function_args)
                     except Exception as e:
-                        logger.error(f"Tool execution failed: {str(e)}")
+                        logger.error("Tool execution failed", extra={
+                            "tool_name": function_name,
+                            "error": str(e)
+                        })
                         function_response = f"Error: {str(e)}"
                     
                     # Add tool call and response to conversation
@@ -153,7 +164,9 @@ class OpenAIBackend(LLMBackend):
                 # Continue the loop to let the model make more tool calls if needed
             
         except Exception as e:
-            raise ValueError(f"Error in OpenAI conversation: {str(e)}")
+            error_msg = f"Error in OpenAI conversation: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            raise ValueError(error_msg)
 
     def convert_tools(self, tools: List[MCPTool]) -> List[Dict[str, Any]]:
         """Convert MCP tools to OpenAI format.
