@@ -50,7 +50,6 @@ from typing import Dict, Optional, List, Any, Tuple
 import asyncio
 
 from contextlib import AsyncExitStack
-from mcp import ClientSession
 from mcp.types import Tool as MCPTool
 from mcp.types import CallToolResult
 

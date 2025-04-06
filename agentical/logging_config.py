@@ -27,7 +27,8 @@ def setup_logging(level: Optional[int] = None, log_dir: Optional[str] = None) ->
     
     # Reset any existing configuration
     logger.handlers.clear()
-    logger.propagate = False  # Don't propagate to avoid duplicate logs
+    # Allow propagation within agentical.* namespace
+    logger.propagate = True
     
     # Configure logger
     level = level or logging.INFO

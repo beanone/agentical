@@ -1,6 +1,5 @@
 """Schema adapter for converting between MCP and Anthropic formats."""
 
-import json
 import logging
 import re
 from typing import Any, Dict, List, Set, Tuple

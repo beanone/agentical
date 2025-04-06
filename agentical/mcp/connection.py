@@ -39,7 +39,7 @@ Implementation Notes:
 import asyncio
 import logging
 from contextlib import AsyncExitStack
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Tuple
 
 import backoff
 from mcp import ClientSession, StdioServerParameters

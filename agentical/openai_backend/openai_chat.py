@@ -7,7 +7,6 @@ import time
 from typing import Any, Dict, List, Optional, Callable
 
 import openai
-from openai.types.chat import ChatCompletion
 
 from agentical.api.llm_backend import LLMBackend
 from agentical.utils.log_utils import sanitize_log_message

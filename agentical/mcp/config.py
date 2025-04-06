@@ -8,7 +8,7 @@ decouple configuration sources from the provider implementation.
 import json
 import logging
 from pathlib import Path
-from typing import Dict, Protocol, Optional
+from typing import Dict, Protocol
 from pydantic import ValidationError
 
 from agentical.mcp.schemas import MCPConfig, ServerConfig

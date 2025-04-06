@@ -6,7 +6,6 @@ import time
 from typing import Any, Dict, List, Optional, Callable
 
 from google import genai
-from google.genai.types import Content
 
 from agentical.api.llm_backend import LLMBackend
 from agentical.utils.log_utils import sanitize_log_message
