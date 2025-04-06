@@ -14,7 +14,7 @@ from agentical.mcp.config import (
     DictBasedMCPConfigProvider,
     ConfigurationError,
 )
-from agentical.mcp.schemas import ServerConfig
+from agentical.mcp.schemas import ServerConfig, MCPConfig
 
 @pytest.fixture
 def valid_server_config():
@@ -220,4 +220,100 @@ async def test_file_based_provider_unicode_handling():
     server_config = config["unicode_server"]
     assert server_config.command == "测试命令"
     assert server_config.args == ["--参数"]
-    assert server_config.env == {"变量": "值"} 
+    assert server_config.env == {"变量": "值"}
+
+@pytest.mark.asyncio
+async def test_server_config_validation():
+    """Test ServerConfig validation rules."""
+    # Test empty command
+    with pytest.raises(ValueError, match="Command cannot be empty"):
+        ServerConfig(command="   ", args=[])
+    
+    # Test invalid args
+    with pytest.raises(ValueError, match="All args must be non-empty strings"):
+        ServerConfig(command="test", args=["", "valid"])
+    
+    with pytest.raises(ValueError, match="All args must be non-empty strings"):
+        ServerConfig(command="test", args=["valid", "   "])
+
+@pytest.mark.asyncio
+async def test_mcp_config_validation():
+    """Test MCPConfig validation rules."""
+    # Test empty server name
+    with pytest.raises(ValueError, match="Server names cannot be empty"):
+        config = {
+            "": ServerConfig(command="test", args=[])
+        }
+        MCPConfig(servers=config)
+    
+    # Test whitespace server name
+    with pytest.raises(ValueError, match="Server names cannot be empty"):
+        config = {
+            "   ": ServerConfig(command="test", args=[])
+        }
+        MCPConfig(servers=config)
+
+@pytest.mark.asyncio
+async def test_dict_based_provider_config_deep_copy():
+    """Test that DictBasedMCPConfigProvider creates proper deep copies."""
+    original_config = {
+        "test_server": ServerConfig(
+            command="test_command",
+            args=["--test"],
+            env={"TEST_ENV": "value"}
+        )
+    }
+    provider = DictBasedMCPConfigProvider(original_config)
+    config1 = await provider.load_config()
+    
+    # Modify the first loaded config
+    config1["test_server"].env["TEST_ENV"] = "modified"
+    
+    # Load again and verify the new config is unaffected
+    config2 = await provider.load_config()
+    assert config2["test_server"].env["TEST_ENV"] == "value"
+
+@pytest.mark.asyncio
+async def test_file_based_provider_invalid_file_encoding():
+    """Test FileBasedMCPConfigProvider with invalid file encoding."""
+    mock_file = mock_open()
+    mock_file.side_effect = UnicodeDecodeError('utf-8', b'', 0, 1, 'invalid utf-8')
+    
+    with patch("builtins.open", mock_file):
+        provider = FileBasedMCPConfigProvider("config.json")
+        with pytest.raises(ConfigurationError, match="Failed to load configuration"):
+            await provider.load_config()
+
+@pytest.mark.asyncio
+async def test_file_based_provider_permission_error():
+    """Test FileBasedMCPConfigProvider with file permission error."""
+    mock_file = mock_open()
+    mock_file.side_effect = PermissionError("Permission denied")
+    
+    with patch("builtins.open", mock_file):
+        provider = FileBasedMCPConfigProvider("config.json")
+        with pytest.raises(ConfigurationError, match="Failed to load configuration"):
+            await provider.load_config()
+
+@pytest.mark.asyncio
+async def test_file_based_provider_large_config():
+    """Test FileBasedMCPConfigProvider with a large configuration."""
+    large_config = {
+        f"server_{i}": {
+            "command": f"command_{i}",
+            "args": [f"--arg{j}" for j in range(5)],
+            "env": {f"ENV_{j}": f"value_{j}" for j in range(5)}
+        }
+        for i in range(100)
+    }
+    
+    mock_file = mock_open(read_data=json.dumps(large_config))
+    
+    with patch("builtins.open", mock_file):
+        provider = FileBasedMCPConfigProvider("config.json")
+        config = await provider.load_config()
+        
+        assert len(config) == 100
+        assert all(f"server_{i}" in config for i in range(100))
+        assert all(len(config[f"server_{i}"].args) == 5 for i in range(100))
+        assert all(len(config[f"server_{i}"].env) == 5 for i in range(100)) 
