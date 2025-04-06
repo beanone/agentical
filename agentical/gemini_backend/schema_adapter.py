@@ -19,9 +19,6 @@ class SchemaAdapter:
         "additionalProperties"
     }
 
-    # Default model to use for Gemini API
-    DEFAULT_MODEL: str = "gemini-2.0-flash-001"
-
     @staticmethod
     def clean_schema(schema: Dict[str, Any]) -> Dict[str, Any]:
         """Recursively removes unsupported fields from the JSON schema.

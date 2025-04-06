@@ -18,18 +18,24 @@ logger = logging.getLogger(__name__)
 class GeminiBackend(LLMBackend):
     """Gemini implementation for chat interactions."""
     
+    DEFAULT_MODEL = "gemini-2.0-flash-001"
+    
     def __init__(self, api_key: Optional[str] = None):
         """Initialize the Gemini backend.
         
         Args:
             api_key: Optional Gemini API key. If not provided, will look for GEMINI_API_KEY env var.
+            
+        Environment Variables:
+            GEMINI_API_KEY: API key for Gemini
+            GEMINI_MODEL: Model to use (defaults to DEFAULT_MODEL if not set)
         """
         api_key = api_key or os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise ValueError("GEMINI_API_KEY not found. Please provide it or set in environment.")
             
         self.client = genai.Client(api_key=api_key)
-        self.model = SchemaAdapter.DEFAULT_MODEL
+        self.model = os.getenv("GEMINI_MODEL", self.DEFAULT_MODEL)
         self.schema_adapter = SchemaAdapter()
 
     def convert_tools(self, tools: List[MCPTool]) -> List[Dict[str, Any]]:

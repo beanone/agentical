@@ -27,6 +27,10 @@ class OpenAIBackend(LLMBackend):
             
         Raises:
             ValueError: If API key is not provided or found in environment
+            
+        Environment Variables:
+            OPENAI_API_KEY: API key for OpenAI
+            OPENAI_MODEL: Model to use (defaults to DEFAULT_MODEL if not set)
         """
         api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not api_key:
@@ -34,7 +38,7 @@ class OpenAIBackend(LLMBackend):
             
         try:
             self.client = AsyncOpenAI(api_key=api_key)
-            self.model = self.DEFAULT_MODEL
+            self.model = os.getenv("OPENAI_MODEL", self.DEFAULT_MODEL)
         except Exception as e:
             raise ValueError(f"Failed to initialize OpenAI client: {str(e)}")
 
