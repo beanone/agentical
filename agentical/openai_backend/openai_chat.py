@@ -37,6 +37,7 @@ class OpenAIBackend(LLMBackend):
         logger.info("Initializing OpenAI backend")
         api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not api_key:
+            logger.error("OPENAI_API_KEY not found")
             raise ValueError("OPENAI_API_KEY not found. Please provide it or set in environment.")
             
         try:
