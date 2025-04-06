@@ -7,7 +7,7 @@ import time
 import traceback
 from typing import Any, Dict, List, Optional, Callable
 
-from anthropic import AsyncAnthropic
+import anthropic
 
 from agentical.api.llm_backend import LLMBackend
 from agentical.utils.log_utils import redact_sensitive_data, sanitize_log_message
@@ -42,7 +42,7 @@ class AnthropicBackend(LLMBackend):
             raise ValueError("ANTHROPIC_API_KEY not found. Please provide it or set in environment.")
             
         try:
-            self.client = AsyncAnthropic(api_key=api_key)
+            self.client = anthropic.AsyncAnthropic(api_key=api_key)
             self.model = os.getenv("ANTHROPIC_MODEL", self.DEFAULT_MODEL)
             self.schema_adapter = SchemaAdapter()
             logger.info("Initialized Anthropic client", extra=redact_sensitive_data({
