@@ -16,11 +16,10 @@ from .schema_adapter import SchemaAdapter
 
 logger = logging.getLogger(__name__)
 
-# Default model for Anthropic API
-DEFAULT_MODEL = "claude-3-opus-20240229"
-
 class AnthropicBackend(LLMBackend):
     """Anthropic implementation for chat interactions."""
+    
+    DEFAULT_MODEL = "claude-3-opus-20240229"
     
     def __init__(self, api_key: Optional[str] = None):
         """Initialize the Anthropic backend.
@@ -30,6 +29,10 @@ class AnthropicBackend(LLMBackend):
             
         Raises:
             ValueError: If API key is not provided or found in environment
+            
+        Environment Variables:
+            ANTHROPIC_API_KEY: API key for Anthropic
+            ANTHROPIC_MODEL: Model to use (defaults to DEFAULT_MODEL if not set)
         """
         logger.debug("Initializing Anthropic backend")
         api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
@@ -38,7 +41,7 @@ class AnthropicBackend(LLMBackend):
             
         try:
             self.client = AsyncAnthropic(api_key=api_key)
-            self.model = DEFAULT_MODEL
+            self.model = os.getenv("ANTHROPIC_MODEL", self.DEFAULT_MODEL)
             self.schema_adapter = SchemaAdapter()
             logger.debug(f"Initialized Anthropic client with model: {self.model}")
         except Exception as e:

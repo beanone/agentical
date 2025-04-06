@@ -142,7 +142,7 @@ Here are some example queries that demonstrate the power of combining multiple s
 
 1. **Weather Comparison Across Cities**:
    ```
-   "Use the calculator-server to find the temperature difference between Seattle and Beijing in celsius"
+   Use the calculator-server to find the temperature difference between Seattle and Beijing in celsius
    ```
    This query uses the weather server to:
    - Get current weather in Seattle
@@ -151,7 +151,7 @@ Here are some example queries that demonstrate the power of combining multiple s
 
 2. **Research and Local Storage**:
    ```
-   "Search for Python async best practices and save them to a local markdown file"
+   Search for Python async best practices and save them to a local markdown file
    ```
    This query combines:
    - Brave Search server for research
@@ -159,7 +159,7 @@ Here are some example queries that demonstrate the power of combining multiple s
 
 3. **Weather-Aware GitHub Analysis**:
    ```
-   "Find active Python projects on GitHub from developers in cities where it's currently sunny"
+   Find active Python projects on GitHub from developers in cities where it's currently sunny
    ```
    This query uses:
    - GitHub server for project search
@@ -168,7 +168,7 @@ Here are some example queries that demonstrate the power of combining multiple s
 
 4. **System Analysis with Documentation**:
    ```
-   "Check system memory usage and create a GitHub issue if it's above 80%"
+   Check system memory usage and create a GitHub issue if it's above 80%
    ```
    This combines:
    - Terminal server for system checks
@@ -394,12 +394,39 @@ Each server in the configuration must implement the Model Context Protocol. The 
 
 ### Environment Variables
 
-- **LLM API Keys** (set based on your chosen backend)
-  - `OPENAI_API_KEY`: Required if using OpenAI backend
-  - `GEMINI_API_KEY`: Required if using Gemini backend
+The framework uses environment variables for configuration. These can be set in a `.env` file:
 
-- **Server Configuration**
-  - Custom variables can be specified in server configs under the `env` field
+```bash
+# API Keys (Required for respective backends)
+OPENAI_API_KEY=your_openai_key     # Required for OpenAI backend
+ANTHROPIC_API_KEY=your_claude_key  # Required for Anthropic backend
+GEMINI_API_KEY=your_gemini_key    # Required for Gemini backend
+
+# Model Selection (Optional - will use defaults if not set)
+OPENAI_MODEL=gpt-4-turbo-preview     # Default model for OpenAI
+ANTHROPIC_MODEL=claude-3-opus-20240229  # Default model for Anthropic
+GEMINI_MODEL=gemini-2.0-flash-001      # Default model for Gemini
+
+# Server Configuration (Set based on your MCP servers)
+OPENWEATHERMAP_API_KEY=your_weather_key  # Required for weather server
+WORKSPACE_DIR=/path/to/workspace         # Optional for file operations
+```
+
+Each LLM backend has its own environment variables for API keys and model selection:
+
+1. **OpenAI Backend**
+   - `OPENAI_API_KEY`: Required for authentication
+   - `OPENAI_MODEL`: Optional, defaults to "gpt-4-turbo-preview"
+
+2. **Anthropic Backend**
+   - `ANTHROPIC_API_KEY`: Required for authentication
+   - `ANTHROPIC_MODEL`: Optional, defaults to "claude-3-opus-20240229"
+
+3. **Gemini Backend**
+   - `GEMINI_API_KEY`: Required for authentication
+   - `GEMINI_MODEL`: Optional, defaults to "gemini-2.0-flash-001"
+
+Additional server-specific variables can be specified in server configs under the `env` field.
 
 ## Error Handling
 
