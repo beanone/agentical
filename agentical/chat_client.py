@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 
 from agentical.api.llm_backend import LLMBackend
 from agentical.mcp.provider import MCPToolProvider
+from agentical.mcp.config import FileBasedMCPConfigProvider
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -119,17 +120,17 @@ async def run_demo(llm_backend: LLMBackend):
         print("Example: python test_mcp_provider.py --config my_config.json")
         sys.exit(1)
     
-    # Initialize provider with the LLM backend
+    # Initialize provider with the LLM backend and config
     logger.debug("Initializing MCPToolProvider with %s", type(llm_backend).__name__)
-    provider = MCPToolProvider(llm_backend=llm_backend)
+    config_provider = FileBasedMCPConfigProvider(config_path)
+    provider = MCPToolProvider(llm_backend=llm_backend, config_provider=config_provider)
     
     try:
-        # Load configurations
+        # Initialize provider and load configurations
         logger.info("Loading MCP configurations from: %s", config_path)
-        provider.available_servers = provider.load_mcp_config(config_path)
+        await provider.initialize()
         logger.info("Loaded %d servers", len(provider.available_servers))
-        print(f"\nLoading MCP configurations from: {config_path}")
-        print(f"Loaded {len(provider.available_servers)} servers")
+        print(f"\nLoaded {len(provider.available_servers)} servers")
         
         # Let user select server
         selected_server = await interactive_server_selection(provider)

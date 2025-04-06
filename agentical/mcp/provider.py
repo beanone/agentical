@@ -14,17 +14,16 @@ Key Features:
 Example:
     ```python
     from agentical.api import LLMBackend
-    from agentical.mcp import MCPToolProvider
+    from agentical.mcp import MCPToolProvider, FileBasedMCPConfigProvider
     
     async def process_queries():
-        # Initialize provider
-        provider = MCPToolProvider(LLMBackend())
-        
-        # Load and verify configuration
-        config = provider.load_mcp_config("mcp_config.json")
+        # Initialize provider with config
+        config_provider = FileBasedMCPConfigProvider("config.json")
+        provider = MCPToolProvider(LLMBackend(), config_provider=config_provider)
         
         try:
-            # Connect to servers
+            # Initialize and connect
+            await provider.initialize()
             await provider.mcp_connect_all()
             
             # Process queries
@@ -45,9 +44,7 @@ Implementation Notes:
     - Ensures proper resource cleanup
 """
 
-import json
 import logging
-from pathlib import Path
 from typing import Dict, Optional, List, Any, Tuple
 import time
 import asyncio
@@ -56,12 +53,12 @@ from contextlib import AsyncExitStack
 from mcp import ClientSession
 from mcp.types import Tool as MCPTool
 from mcp.types import CallToolResult
-from pydantic import ValidationError
 
 from agentical.api import LLMBackend
 from agentical.mcp.health import HealthMonitor, ServerReconnector, ServerCleanupHandler
-from agentical.mcp.schemas import MCPConfig, ServerConfig
+from agentical.mcp.schemas import ServerConfig
 from agentical.mcp.connection import MCPConnectionManager
+from agentical.mcp.config import MCPConfigProvider, DictBasedMCPConfigProvider
 
 logger = logging.getLogger(__name__)
 
@@ -80,55 +77,36 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
         available_servers (Dict[str, ServerConfig]): Available server configurations
         tools_by_server (Dict[str, List[MCPTool]]): Tools indexed by server
         all_tools (List[MCPTool]): Combined list of all available tools
-        
-    Implementation Notes:
-        - Implements ServerReconnector and ServerCleanupHandler protocols
-        - Uses AsyncExitStack for proper resource management
-        - Maintains tool registry for efficient dispatch
-        - Provides automatic server health monitoring
-        - Ensures proper cleanup of all resources
-        
-    Example:
-        ```python
-        provider = MCPToolProvider(llm_backend)
-        provider.available_servers = provider.load_mcp_config("config.json")
-        
-        try:
-            await provider.mcp_connect("main_server")
-            response = await provider.process_query("List files")
-            print(response)
-        finally:
-            await provider.cleanup_all()
-        ```
     """
     
     # Health monitoring settings
     HEARTBEAT_INTERVAL = 30  # seconds
     MAX_HEARTBEAT_MISS = 2
     
-    def __init__(self, llm_backend: LLMBackend):
+    def __init__(
+        self, 
+        llm_backend: LLMBackend,
+        config_provider: Optional[MCPConfigProvider] = None,
+        server_configs: Optional[Dict[str, ServerConfig]] = None
+    ):
         """Initialize the MCP Tool Provider.
         
-        Sets up the provider with the specified LLM backend and initializes
-        all necessary components including connection management and health
-        monitoring.
-        
         Args:
-            llm_backend: LLMBackend instance to use for processing queries.
-                        Must be a valid instance implementing the LLMBackend
-                        interface.
+            llm_backend: LLMBackend instance for processing queries
+            config_provider: Optional provider for loading configurations
+            server_configs: Optional direct server configurations
             
         Raises:
-            TypeError: If llm_backend is None or not an instance of LLMBackend.
-            
-        Note:
-            The provider must be properly initialized with server configurations
-            before attempting to connect to any servers.
+            TypeError: If llm_backend is None or invalid type
+            ValueError: If neither config_provider nor server_configs is provided
         """
         logger.debug("Initializing MCPToolProvider")
         if not isinstance(llm_backend, LLMBackend):
             logger.error("Invalid llm_backend type: %s", type(llm_backend))
             raise TypeError("llm_backend must be an instance of LLMBackend")
+            
+        if not config_provider and not server_configs:
+            raise ValueError("Either config_provider or server_configs must be provided")
             
         self.exit_stack = AsyncExitStack()
         self.connection_manager = MCPConnectionManager(self.exit_stack)
@@ -136,6 +114,11 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
         self.llm_backend = llm_backend
         self.tools_by_server: Dict[str, List[MCPTool]] = {}
         self.all_tools: List[MCPTool] = []
+        
+        # Store configuration source
+        self.config_provider = config_provider
+        if server_configs:
+            self.config_provider = DictBasedMCPConfigProvider(server_configs)
         
         # Initialize health monitor
         self.health_monitor = HealthMonitor(
@@ -145,57 +128,20 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
             cleanup_handler=self
         )
         logger.debug("MCPToolProvider initialized successfully")
+    
+    async def initialize(self) -> None:
+        """Initialize the provider with configurations.
         
-    @staticmethod
-    def load_mcp_config(config_path: str | Path) -> Dict[str, ServerConfig]:
-        """Load MCP configurations from a JSON file.
+        This method must be called before attempting to connect to any servers
+        or process queries.
         
-        Loads and validates server configurations from a JSON file. The file
-        should contain a mapping of server names to their configurations.
-        
-        Args:
-            config_path: Path to the MCP configuration file. Can be either a
-                       string path or Path object.
-            
-        Returns:
-            Dict mapping server names to their validated configurations.
-            
         Raises:
-            ValidationError: If configuration format is invalid
-            JSONDecodeError: If JSON parsing fails
-            FileNotFoundError: If config file doesn't exist
-            
-        Example config format:
-            ```json
-            {
-                "main_server": {
-                    "command": "server_binary",
-                    "args": ["--port", "8080"],
-                    "is_websocket": false,
-                    "env": {"DEBUG": "1"}
-                }
-            }
-            ```
+            ConfigurationError: If configuration loading fails
         """
-        logger.info("Loading MCP configuration from: %s", config_path)
-        try:
-            with open(config_path) as f:
-                raw_config = json.load(f)
-            
-            # Parse and validate configuration using Pydantic schema
-            config = MCPConfig(servers=raw_config)
-            logger.info("Successfully loaded configuration with %d servers", len(config.servers))
-            return config.servers
-            
-        except json.JSONDecodeError as e:
-            logger.error("Failed to parse configuration file: %s", str(e))
-            raise
-        except ValidationError as e:
-            logger.error("Invalid configuration format: %s", str(e))
-            raise
-        except Exception as e:
-            logger.error("Error loading configuration: %s", str(e))
-            raise
+        logger.info("Initializing provider with configurations")
+        self.available_servers = await self.config_provider.load_config()
+        logger.info("Provider initialized with %d server configurations", 
+                   len(self.available_servers))
 
     def list_available_servers(self) -> List[str]:
         """List all available MCP servers from the loaded configuration.
