@@ -34,7 +34,10 @@ class MockClientSession:
         return Mock(tools=self.tools)
     
     async def call_tool(self, tool_name, tool_args):
-        return CallToolResult(result="success")
+        return CallToolResult(
+            result="success",
+            content=[{"type": "text", "text": "Tool execution successful"}]
+        )
 
 @pytest.fixture
 def mock_llm_backend():
@@ -217,4 +220,141 @@ async def test_provider_reconnect(mock_llm_backend, valid_server_configs, mock_s
         await provider.cleanup_server("server1")
         success = await provider.reconnect("server1")
         assert success
-        assert len(provider.tool_registry.get_server_tools("server1")) == 2 
+        assert len(provider.tool_registry.get_server_tools("server1")) == 2
+
+@pytest.mark.asyncio
+async def test_execute_tool_success(mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack):
+    """Test successful tool execution."""
+    provider = MCPToolProvider(mock_llm_backend, server_configs=valid_server_configs)
+    provider.exit_stack = mock_exit_stack
+    await provider.initialize()
+    
+    # Create and store mock session
+    session = mock_session("server1")
+    provider.connection_service.get_session = Mock(return_value=session)
+    
+    with patch.object(provider.connection_service._connection_manager, 'connect', 
+                     return_value=session):
+        # Connect to a server
+        await provider.mcp_connect("server1")
+        
+        # Configure mock LLM response
+        async def mock_process_query(query, tools, execute_tool, **kwargs):
+            # Execute the tool and verify response
+            result = await execute_tool("tool1", {"arg": "value"})
+            assert isinstance(result, CallToolResult)
+            assert result.result == "success"
+            return "Test response"
+            
+        mock_llm_backend.process_query.side_effect = mock_process_query
+        
+        # Process query
+        response = await provider.process_query("Test query")
+        assert response == "Test response"
+        
+        # Verify LLM backend was called
+        mock_llm_backend.process_query.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_execute_tool_no_session(mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack):
+    """Test tool execution with no active session."""
+    provider = MCPToolProvider(mock_llm_backend, server_configs=valid_server_configs)
+    provider.exit_stack = mock_exit_stack
+    await provider.initialize()
+    
+    with patch.object(provider.connection_service._connection_manager, 'connect', 
+                     side_effect=lambda name, _: mock_session(name)):
+        # Connect to a server
+        await provider.mcp_connect("server1")
+        
+        # Mock connection service to return no session
+        provider.connection_service.get_session = Mock(return_value=None)
+        
+        # Configure mock LLM response
+        async def mock_process_query(query, tools, execute_tool, **kwargs):
+            # Execute tool and expect ValueError
+            with pytest.raises(ValueError, match="No active session for server server1"):
+                await execute_tool("tool1", {"arg": "value"})
+            return "Test response"
+            
+        mock_llm_backend.process_query.side_effect = mock_process_query
+        
+        # Process query
+        response = await provider.process_query("Test query")
+        assert response == "Test response"
+        
+        # Verify LLM backend was called
+        mock_llm_backend.process_query.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_execute_tool_not_found(mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack):
+    """Test execution of non-existent tool."""
+    provider = MCPToolProvider(mock_llm_backend, server_configs=valid_server_configs)
+    provider.exit_stack = mock_exit_stack
+    await provider.initialize()
+    
+    with patch.object(provider.connection_service._connection_manager, 'connect', 
+                     side_effect=lambda name, _: mock_session(name)):
+        # Connect to a server
+        await provider.mcp_connect("server1")
+        
+        # Configure mock LLM response
+        async def mock_process_query(query, tools, execute_tool, **kwargs):
+            # Execute unknown tool and expect ValueError
+            with pytest.raises(ValueError, match="Tool unknown_tool not found in any connected server"):
+                await execute_tool("unknown_tool", {"arg": "value"})
+            return "Test response"
+            
+        mock_llm_backend.process_query.side_effect = mock_process_query
+        
+        # Process query
+        response = await provider.process_query("Test query")
+        assert response == "Test response"
+        
+        # Verify LLM backend was called
+        mock_llm_backend.process_query.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_execute_tool_session_error(mock_llm_backend, valid_server_configs, mock_exit_stack):
+    """Test tool execution when session raises error."""
+    provider = MCPToolProvider(mock_llm_backend, server_configs=valid_server_configs)
+    provider.exit_stack = mock_exit_stack
+    await provider.initialize()
+    
+    # Create mock session that raises error
+    error_session = AsyncMock()
+    error_session.list_tools = AsyncMock(return_value=Mock(tools=[
+        MCPTool(
+            name="tool1",
+            description="Tool 1",
+            parameters={},
+            inputSchema={"type": "object", "properties": {}}  # Add required inputSchema
+        )
+    ]))
+    error_session.call_tool = AsyncMock(side_effect=Exception("Tool execution failed"))
+    
+    # Store session in connection service
+    provider.connection_service.get_session = Mock(return_value=error_session)
+    
+    with patch.object(provider.connection_service._connection_manager, 'connect', 
+                     return_value=error_session):
+        # Connect to a server
+        await provider.mcp_connect("server1")
+        
+        # Configure mock LLM response
+        async def mock_process_query(query, tools, execute_tool, **kwargs):
+            # Execute tool and expect error
+            with pytest.raises(Exception, match="Tool execution failed"):
+                await execute_tool("tool1", {"arg": "value"})
+            return "Test response"
+            
+        mock_llm_backend.process_query.side_effect = mock_process_query
+        
+        # Process query
+        response = await provider.process_query("Test query")
+        assert response == "Test response"
+        
+        # Verify LLM backend was called
+        mock_llm_backend.process_query.assert_called_once()
+        # Verify tool call was attempted
+        error_session.call_tool.assert_called_once_with("tool1", {"arg": "value"}) 
