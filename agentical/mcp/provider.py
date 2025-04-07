@@ -378,20 +378,11 @@ class MCPToolProvider:
             )
             raise
 
-    async def cleanup(self, server_name: str = None) -> None:
+    async def cleanup(self, server_name: str | None = None) -> None:
         """Clean up server resources.
-
-        This method serves two purposes:
-        1. When called with server_name, it cleans up resources for a specific server
-        2. When called without server_name, it cleans up all provider resources
-
+        
         Args:
-            server_name: Optional name of the server to clean up. If not provided,
-                        cleans up all resources.
-
-        Note:
-            - Safe to call multiple times
-            - Handles cleanup errors gracefully
+            server_name: Optional server name to clean up. If None, cleans up all resources.
         """
         if server_name is not None:
             await self.cleanup_server(server_name)

@@ -303,7 +303,7 @@ async def test_process_query_with_context(
     # Verify the contents structure
     assert isinstance(contents, list)
     assert len(contents) == 3  # Two context messages + new query
-    assert all(isinstance(content, (dict, Content)) for content in contents)
+    assert all(isinstance(content, dict | Content) for content in contents)
 
     # Verify the context messages are preserved
     assert contents[0]["role"] == "user"

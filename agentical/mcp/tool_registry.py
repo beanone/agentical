@@ -1,8 +1,8 @@
 """Tool Registry for MCP.
 
-This module provides a centralized registry for managing MCP tools across different servers.
-It handles tool registration, lookup, and cleanup operations while maintaining the relationship
-between tools and their hosting servers.
+This module provides a centralized registry for managing MCP tools across different 
+servers. It handles tool registration, lookup, and cleanup operations while 
+maintaining the relationship between tools and their hosting servers.
 
 Example:
     ```python

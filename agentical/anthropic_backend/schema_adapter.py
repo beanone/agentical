@@ -23,7 +23,8 @@ class SchemaAdapter:
 
     @staticmethod
     def extract_answer(text: str) -> str:
-        """Extract the content within <answer> tags, or return the full text if not found.
+        """Extract the content within <answer> tags, or return the full text if not
+        found.
 
         Args:
             text: The text to extract answer from
@@ -120,7 +121,7 @@ class SchemaAdapter:
 
     @staticmethod
     def create_tool_response_message(
-        tool_name: str, result: Any = None, error: str = None
+        tool_name: str, result: Any | None = None, error: str | None = None
     ) -> MessageParam:
         """Create a tool response message in Anthropic format."""
         content = (

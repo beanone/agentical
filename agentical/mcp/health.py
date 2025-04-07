@@ -61,7 +61,8 @@ class HealthMonitor:
 
         Args:
             heartbeat_interval: Time in seconds between heartbeat checks
-            max_heartbeat_miss: Maximum number of consecutive heartbeat misses before reconnection
+            max_heartbeat_miss: Maximum number of consecutive heartbeat misses 
+                before reconnection
             reconnector: Handler for server reconnection attempts
             cleanup_handler: Handler for cleaning up server resources
         """

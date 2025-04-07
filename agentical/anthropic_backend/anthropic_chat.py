@@ -29,7 +29,8 @@ class AnthropicBackend(LLMBackend):
         """Initialize the Anthropic backend.
 
         Args:
-            api_key: Optional Anthropic API key. If not provided, will look for ANTHROPIC_API_KEY env var.
+            api_key: Optional Anthropic API key. If not provided, will look for 
+                ANTHROPIC_API_KEY env var.
 
         Raises:
             ValueError: If API key is not provided or found in environment
@@ -129,10 +130,14 @@ class AnthropicBackend(LLMBackend):
 
             # Set default system content if none provided
             if not system_content:
-                system_content = """You are an AI assistant. When responding, please follow these guidelines:
-                1. If you need to think through the problem, enclose your reasoning within <thinking> tags.
-                2. Always provide your final answer within <answer> tags.
-                3. If no reasoning is needed, you can omit the <thinking> tags."""
+                system_content = (
+                    "You are an AI assistant. When responding, please follow these "
+                    "guidelines:\n"
+                    "1. If you need to think through the problem, enclose your reasoning "
+                    "within <thinking> tags.\n"
+                    "2. Always provide your final answer within <answer> tags.\n"
+                    "3. If no reasoning is needed, you can omit the <thinking> tags."
+                )
 
             # Create system message content blocks
             system_blocks = (
@@ -186,7 +191,8 @@ class AnthropicBackend(LLMBackend):
                         # Add tool call and response to messages
                         anthropic_messages.append(
                             self.schema_adapter.create_assistant_message(
-                                f"I'll use the {tool_name} tool with input: {json.dumps(tool_params)}"
+                                f"I'll use the {tool_name} tool with input: "
+                                f"{json.dumps(tool_params)}"
                             )
                         )
                         anthropic_messages.append(

@@ -47,7 +47,10 @@ def test_init_with_invalid_api_key():
     ):
         with pytest.raises(
             ValueError,
-            match="Failed to initialize Anthropic client: 401 Client Error: Unauthorized",
+            match=(
+                "Failed to initialize Anthropic client: "
+                "401 Client Error: Unauthorized"
+            ),
         ):
             AnthropicBackend(api_key="invalid_key")
 

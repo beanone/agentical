@@ -27,7 +27,8 @@ def sanitize_log_message(message: Any) -> Any:
     """Remove sensitive patterns from log messages using Presidio.
 
     Args:
-        message: Log message to sanitize. Can be any type, but only strings are processed.
+        message: Log message to sanitize. Can be any type, but only strings are 
+            processed.
 
     Returns:
         Sanitized message if input was a string, otherwise returns input unchanged

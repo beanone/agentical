@@ -1,7 +1,7 @@
 """Unit tests for MCP Connection components.
 
-This module contains tests for the MCPConnectionService and MCPConnectionManager classes,
-which handle server connections and health monitoring.
+This module contains tests for the MCPConnectionService and MCPConnectionManager 
+classes, which handle server connections and health monitoring.
 """
 
 from contextlib import AsyncExitStack

@@ -3,7 +3,8 @@
 This module provides a unified connection management system for MCP servers,
 handling both connection lifecycle and health monitoring.
 
-This module provides a centralized connection management system for MCP (Machine Control Protocol) servers.
+This module provides a centralized connection management system for MCP
+(Machine Control Protocol) servers.
 It handles both WebSocket and stdio-based connections, with features including:
 - Automatic connection retry with exponential backoff
 - Resource cleanup and management

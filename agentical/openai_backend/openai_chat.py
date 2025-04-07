@@ -26,7 +26,8 @@ class OpenAIBackend(LLMBackend):
         """Initialize the OpenAI backend.
 
         Args:
-            api_key: Optional OpenAI API key. If not provided, will look for OPENAI_API_KEY env var.
+            api_key: Optional OpenAI API key. If not provided, will look for 
+                OPENAI_API_KEY env var.
 
         Raises:
             ValueError: If API key is not provided or found in environment

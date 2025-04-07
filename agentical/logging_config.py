@@ -16,7 +16,8 @@ def setup_logging(
 
     Args:
         level: The logging level to use. Defaults to INFO if not specified.
-        log_dir: Optional directory for log files. If specified, will create rotating log files.
+        log_dir: Optional directory for log files. If specified, will create
+            rotating log files.
 
     Returns:
         logging.Logger: The configured agentical logger instance.

@@ -27,7 +27,8 @@ class GeminiBackend(LLMBackend):
         """Initialize the Gemini backend.
 
         Args:
-            api_key: Optional Gemini API key. If not provided, will look for GEMINI_API_KEY env var.
+            api_key: Optional Gemini API key. If not provided, will look for
+                GEMINI_API_KEY env var.
 
         Environment Variables:
             GEMINI_API_KEY: API key for Gemini
