@@ -167,7 +167,9 @@ class MCPToolProvider:
                 },
             )
             raise ValueError(
-                f"Unknown server: {server_name}. Available servers: {self.list_available_servers()}"
+                "Unknown server: {}. Available servers: {}".format(
+                    server_name, self.list_available_servers()
+                )
             )
 
         try:
@@ -341,7 +343,9 @@ class MCPToolProvider:
                 num_servers = len(self.tool_registry.tools_by_server)
                 num_tools_cleared, num_servers_cleared = self.tool_registry.clear()
                 logger.info(
-                    f"Tool registry cleared - {num_tools} tools from {num_servers} servers"
+                    "Tool registry cleared - {} tools from {} servers".format(
+                        num_tools, num_servers
+                    )
                 )
 
             # Clean up all connections through the service
@@ -380,9 +384,10 @@ class MCPToolProvider:
 
     async def cleanup(self, server_name: str | None = None) -> None:
         """Clean up server resources.
-        
+
         Args:
-            server_name: Optional server name to clean up. If None, cleans up all resources.
+            server_name: Optional server name to clean up. If None, cleans up all
+                resources.
         """
         if server_name is not None:
             await self.cleanup_server(server_name)

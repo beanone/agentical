@@ -29,7 +29,7 @@ class AnthropicBackend(LLMBackend):
         """Initialize the Anthropic backend.
 
         Args:
-            api_key: Optional Anthropic API key. If not provided, will look for 
+            api_key: Optional Anthropic API key. If not provided, will look for
                 ANTHROPIC_API_KEY env var.
 
         Raises:
@@ -133,8 +133,8 @@ class AnthropicBackend(LLMBackend):
                 system_content = (
                     "You are an AI assistant. When responding, please follow these "
                     "guidelines:\n"
-                    "1. If you need to think through the problem, enclose your reasoning "
-                    "within <thinking> tags.\n"
+                    "1. If you need to think through the problem, enclose your "
+                    "reasoning within <thinking> tags.\n"
                     "2. Always provide your final answer within <answer> tags.\n"
                     "3. If no reasoning is needed, you can omit the <thinking> tags."
                 )
