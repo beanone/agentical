@@ -7,7 +7,7 @@
 [![Code Quality](https://github.com/beanone/agentical/actions/workflows/tests.yml/badge.svg?branch=main&event=push&label=code+quality)](https://github.com/beanone/agentical/actions/workflows/tests.yml)
 [![PyPI version](https://badge.fury.io/py/beanone-agentical.svg)](https://badge.fury.io/py/beanone-agentical)
 
-# Agentical: MCP-Compliant LLM Integration Framework <a href="https://github.com/beanone"><img src="https://avatars.githubusercontent.com/u/19966751?s=400&u=c06156f8fcfafedcfeb1bb2f9cca36feb3b4395a&v=4" height="35" align="right"/></a>
+# Agentical: MCP-Compliant LLM Integration Framework
 
 A robust Python framework for integrating Large Language Models (LLMs) with tools using the Model Context Protocol (MCP). This implementation provides a clean, type-safe, and maintainable way to connect LLMs with external tools and data sources.
 
