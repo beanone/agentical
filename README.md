@@ -99,22 +99,6 @@ Here are some example queries that demonstrate the power of combining multiple s
    - Brave Search server for research
    - File system server for saving results
 
-   **Weather-Aware GitHub Analysis**:
-   ```
-   Find active Python projects on GitHub from developers in cities where it's currently sunny
-   ```
-   This query uses:
-   - GitHub server for project search
-   - Weather server for city conditions
-   - Brave Search for additional context
-
-   **System Analysis with Documentation**:
-   ```
-   Check system memory usage and create a GitHub issue if it's above 80%
-   ```
-   This combines:
-   - Terminal server for system checks
-   - GitHub server for issue creation
 
 ## Architecture
 
