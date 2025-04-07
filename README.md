@@ -1,6 +1,6 @@
 <img src="docs/assets/logos/logo.svg" alt="Agentical Logo" width="100%"/>
 
-[![Python Versions](https://img.shields.io/pypi/pyversions/beanone-agentical.svg)](https://pypi.org/project/beanone-agentical/)
+[![Python Versions](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/beanone/agentical/blob/main/LICENSE)
 [![Tests](https://github.com/beanone/agentical/actions/workflows/tests.yml/badge.svg?python=3.12)](https://github.com/beanone/agentical/actions/workflows/tests.yml)
 [![Coverage](docs/assets/badges/coverage.svg)](htmlcov/index.html)
