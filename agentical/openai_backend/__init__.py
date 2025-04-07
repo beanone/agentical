@@ -2,4 +2,4 @@
 
 from .openai_chat import OpenAIBackend
 
-__all__ = ["OpenAIBackend"] 
+__all__ = ["OpenAIBackend"]

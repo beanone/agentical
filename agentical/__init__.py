@@ -1,1 +1,1 @@
-"""Agentical package.""" 
+"""Agentical package."""

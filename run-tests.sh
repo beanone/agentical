@@ -2,4 +2,4 @@
 
 
 # Run the script
-PYTHONPATH=/mnt/d/dev/agentical pytest tests -v
+pytest tests -v

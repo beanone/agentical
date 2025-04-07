@@ -2,9 +2,11 @@
 
 import asyncio
 import logging
-import agentical.chat_client as chat_client
-from agentical.openai_backend.openai_chat import OpenAIBackend
+
+from agentical import chat_client
 from agentical.logging_config import setup_logging
+from agentical.openai_backend.openai_chat import OpenAIBackend
+
 
 async def main():
     # Enable info logging
@@ -13,4 +15,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    asyncio.run(main())
