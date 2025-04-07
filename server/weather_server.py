@@ -12,17 +12,18 @@ Examples:
     • Feels like: 14°C
     • Humidity: 75%
     • Wind speed: 4.2 m/s
-    
+
     With country code:
     >>> result = await get_weather("London, CA", "imperial")
     >>> print(result)  # Shows weather for London, Canada
 """
 
 import os
-from enum import Enum
-import aiohttp
 from dataclasses import dataclass
-from typing import Dict, Any, Final
+from enum import Enum
+from typing import Any, Final
+
+import aiohttp
 from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("weather")
@@ -34,35 +35,39 @@ API_KEY = os.getenv("OPENWEATHERMAP_API_KEY")
 if not API_KEY:
     raise ValueError("OPENWEATHERMAP_API_KEY environment variable is required")
 
+
 class WeatherError(Exception):
     """Raised when there is an error getting weather information."""
+
     pass
+
 
 class TemperatureUnit(str, Enum):
     """Valid temperature units."""
+
     CELSIUS = "celsius"
     FAHRENHEIT = "fahrenheit"
     KELVIN = "kelvin"
 
 
 # OpenWeatherMap API mappings
-UNIT_MAPPING: Final[Dict[TemperatureUnit, str]] = {
+UNIT_MAPPING: Final[dict[TemperatureUnit, str]] = {
     TemperatureUnit.CELSIUS: "metric",
     TemperatureUnit.FAHRENHEIT: "imperial",
-    TemperatureUnit.KELVIN: ""  # Kelvin is the default unit in OpenWeatherMap
+    TemperatureUnit.KELVIN: "",  # Kelvin is the default unit in OpenWeatherMap
 }
 
-UNIT_SYMBOLS: Final[Dict[TemperatureUnit, str]] = {
+UNIT_SYMBOLS: Final[dict[TemperatureUnit, str]] = {
     TemperatureUnit.CELSIUS: "°C",
     TemperatureUnit.FAHRENHEIT: "°F",
-    TemperatureUnit.KELVIN: "K"
+    TemperatureUnit.KELVIN: "K",
 }
 
 
 @dataclass(frozen=True)
 class WeatherData:
     """Structured weather data.
-    
+
     Attributes:
         description: Weather condition description
         temperature: Current temperature in the specified unit
@@ -70,6 +75,7 @@ class WeatherData:
         humidity: Relative humidity percentage
         wind_speed: Wind speed in meters per second
     """
+
     description: str
     temperature: float
     feels_like: float
@@ -77,13 +83,15 @@ class WeatherData:
     wind_speed: float
 
 
-async def _check_weather_response(response: aiohttp.ClientResponse, location: str) -> None:
+async def _check_weather_response(
+    response: aiohttp.ClientResponse, location: str
+) -> None:
     """Check the weather API response for errors.
-    
+
     Args:
         response: The aiohttp response to check
         location: The location string used in the request, for error messages
-        
+
     Raises:
         WeatherError: If the response indicates an error
     """
@@ -95,42 +103,38 @@ async def _check_weather_response(response: aiohttp.ClientResponse, location: st
         )
 
 
-async def _get_weather_data(location: str, units: str = "metric") -> Dict[str, Any]:
+async def _get_weather_data(location: str, units: str = "metric") -> dict[str, Any]:
     """Get weather data from OpenWeatherMap API.
-    
+
     Args:
         location: City name or location
         units: Temperature units (metric/imperial)
-        
+
     Returns:
         Weather data from API
-        
+
     Raises:
         WeatherError: If there is an error getting weather data
         aiohttp.ClientError: If there is a network error
     """
-    params = {
-        "q": location,
-        "units": units,
-        "appid": API_KEY
-    }
-    
+    params = {"q": location, "units": units, "appid": API_KEY}
+
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(BASE_URL, params=params) as response:
                 await _check_weather_response(response, location)
                 return await response.json()
     except aiohttp.ClientError as e:
-        raise WeatherError(f"Network error: {str(e)}")
+        raise WeatherError(f"Network error: {e!s}")
 
 
-def _format_weather_response(data: Dict[str, Any], units: str) -> str:
+def _format_weather_response(data: dict[str, Any], units: str) -> str:
     """Format weather data into a human-readable response.
-    
+
     Args:
         data: Weather data from API
         units: Temperature units used (metric/imperial)
-        
+
     Returns:
         Formatted weather information
     """
@@ -138,10 +142,10 @@ def _format_weather_response(data: Dict[str, Any], units: str) -> str:
         weather = data["weather"][0]
         main = data["main"]
         wind = data["wind"]
-        
+
         # Get temperature symbol
         temp_symbol = "°C" if units == "metric" else "°F"
-        
+
         # Format response
         lines = [
             f"Weather in {data['name']}, {data['sys']['country']}:",
@@ -149,25 +153,26 @@ def _format_weather_response(data: Dict[str, Any], units: str) -> str:
             f"• Temperature: {main['temp']:.1f}{temp_symbol}",
             f"• Feels like: {main['feels_like']:.1f}{temp_symbol}",
             f"• Humidity: {main['humidity']}%",
-            f"• Wind speed: {wind['speed']:.1f} {'m/s' if units == 'metric' else 'mph'}"
+            f"• Wind speed: {wind['speed']:.1f} "
+            f"{'m/s' if units == 'metric' else 'mph'}",
         ]
-        
+
         return "\n".join(lines)
     except KeyError as e:
-        raise WeatherError(f"Invalid weather data format: missing {str(e)}")
+        raise WeatherError(f"Invalid weather data format: missing {e!s}")
 
 
 @mcp.tool()
 async def get_weather(location: str, units: str = "metric") -> str:
     """Get current weather information for a location.
-    
+
     Args:
         location: City name or location (e.g., 'London' or 'New York, US')
         units: Temperature units ('metric' for Celsius, 'imperial' for Fahrenheit)
-        
+
     Returns:
         Formatted weather information as a string
-        
+
     Example:
         >>> await get_weather("London", "metric")
         Weather in London, GB:
@@ -180,14 +185,14 @@ async def get_weather(location: str, units: str = "metric") -> str:
     try:
         if units not in ["metric", "imperial"]:
             return f"Invalid units: {units}. Must be 'metric' or 'imperial'."
-            
+
         data = await _get_weather_data(location, units)
         return _format_weather_response(data, units)
     except WeatherError as e:
         return str(e)
     except Exception as e:
-        return f"Error getting weather: {str(e)}"
+        return f"Error getting weather: {e!s}"
 
 
 if __name__ == "__main__":
-    mcp.run(transport='stdio')
+    mcp.run(transport="stdio")

@@ -2,4 +2,4 @@
 
 from .gemini_chat import GeminiBackend
 
-__all__ = ['GeminiBackend'] 
+__all__ = ["GeminiBackend"]

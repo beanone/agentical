@@ -1,6 +1,25 @@
+[![Beanone](https://avatars.githubusercontent.com/u/19966751?s=400&u=c06156f8fcfafedcfeb1bb2f9cca36feb3b4395a&v=4)](https://github.com/beanone)
+
+<img src="docs/assets/logos/logo.svg" alt="Agentical Logo" width="100%"/>
+
+[![Python Versions](https://img.shields.io/pypi/pyversions/beanone-agentical.svg)](https://pypi.org/project/beanone-agentical/)
+[![License](https://img.shields.io/github/license/beanone/agentical.svg)](https://github.com/beanone/agentical/blob/main/LICENSE)
+[![Tests](https://github.com/beanone/agentical/actions/workflows/tests.yml/badge.svg)](https://github.com/beanone/agentical/actions/workflows/tests.yml)
+[![Coverage](https://github.com/beanone/agentical/actions/workflows/tests.yml/badge.svg?branch=main&event=push&label=coverage)](https://github.com/beanone/agentical/actions/workflows/tests.yml)
+[![Code Quality](https://github.com/beanone/agentical/actions/workflows/tests.yml/badge.svg?branch=main&event=push&label=code+quality)](https://github.com/beanone/agentical/actions/workflows/tests.yml)
+[![PyPI version](https://badge.fury.io/py/beanone-agentical.svg)](https://badge.fury.io/py/beanone-agentical)
+
 # Agentical: MCP-Compliant LLM Integration Framework
 
 A robust Python framework for integrating Large Language Models (LLMs) with tools using the Model Context Protocol (MCP). This implementation provides a clean, type-safe, and maintainable way to connect LLMs with external tools and data sources.
+
+## Table of Contents
+- [Features](#features)
+- [Quick Start](#quick-start)
+  - [Installation](#installation)
+  - [Basic Usage](#basic-usage)
+- [Multiple MCP Server Usage](#multiple-mcp-server-usage)
+- [Architecture](#architecture)
 
 ## Features
 
@@ -28,6 +47,30 @@ source .venv/bin/activate  # Linux/Mac
 # Install from PyPI
 pip install beanone-agentical
 ```
+
+### Running the Example
+
+1. Download everything under the server folder to your local server folder
+2. Create a `.env` file with your API keys:
+   ```bash
+   # .env file
+   OPENAI_API_KEY=your_openai_key  # If using OpenAI backend
+   # or
+   GEMINI_API_KEY=your_gemini_key  # If using Gemini backend
+   ```
+
+3. Create `config.json` from the `config_template.json`:
+   ```bash
+   cp config_template.json config.json
+   # Then edit config.json with your settings
+   ```
+
+4. Download one of the demo files (e.g., `demo_openai.py`)
+
+5. Run the demo:
+   ```bash
+   python demo_openai.py
+   ```
 
 ### Basic Usage
 
@@ -210,7 +253,6 @@ The framework follows a clean, layered architecture:
 
 For detailed information about specific components:
 
-- [Provider Architecture](docs/provider_architecture.md) - Detailed documentation about the LLM provider system
 
 Here is  a more detailed view of the system architecture and component relationships:
 
@@ -291,7 +333,7 @@ graph TD
 
 ### Key Components
 
-- **MCPToolProvider**: MCP interactions
+- **MCPToolProvider**: MCP interactions ([Provider Architecture](docs/provider_architecture.md) for more detail)
   - Load MCP servers from configuration (Discovery based can be implemented later)
   - Handles server connection
   - Manages resource lifecycle with AsyncExitStack

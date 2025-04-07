@@ -1,0 +1,11 @@
+[lint]
+# Ignore specific error codes for specific files
+[lint.per-file-ignores]
+"agentical/anthropic_backend/anthropic_chat.py" = ["PLR0912"]  # Too many branches
+"agentical/chat_client.py" = ["PLR0915"]  # Too many statements
+"agentical/gemini_backend/schema_adapter.py" = ["PLR0912"]  # Too many branches
+"tests/*" = ["F841"]  # Ignore unused variables in test files
+
+[lint.pylint]
+max-branches = 14  # Default is 12
+max-statements = 51  # Default is 50
