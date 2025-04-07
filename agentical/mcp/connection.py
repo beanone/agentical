@@ -255,28 +255,33 @@ class MCPConnectionManager:
             - Safe to call multiple times
             - Handles cleanup errors gracefully
             - Removes server from internal tracking
+            - Session cleanup handled by AsyncExitStack
         """
         logger.debug("Cleaning up resources for server: %s", server_name)
         
         try:
-            # Close session if it exists
+            # Remove session reference - cleanup handled by AsyncExitStack
             if server_name in self.sessions:
-                session = self.sessions[server_name]
-                await session.close()
                 del self.sessions[server_name]
             
-            # Close stdio if it exists
+            # Close stdio if it exists and is not None
             if server_name in self.stdios:
                 stdio = self.stdios[server_name]
-                if hasattr(stdio, 'close'):
-                    await stdio.close()
+                if stdio is not None and hasattr(stdio, 'close'):
+                    try:
+                        await stdio.close()
+                    except Exception as e:
+                        logger.debug("Error closing stdio for %s: %s", server_name, str(e))
                 del self.stdios[server_name]
             
-            # Close write if it exists
+            # Close write if it exists and is not None
             if server_name in self.writes:
                 write = self.writes[server_name]
-                if hasattr(write, 'close'):
-                    await write.close()
+                if write is not None and hasattr(write, 'close'):
+                    try:
+                        await write.close()
+                    except Exception as e:
+                        logger.debug("Error closing write for %s: %s", server_name, str(e))
                 del self.writes[server_name]
                 
             if server_name in self._configs:
