@@ -1,15 +1,13 @@
-[![Beanone](https://avatars.githubusercontent.com/u/19966751?s=400&u=c06156f8fcfafedcfeb1bb2f9cca36feb3b4395a&v=4)](https://github.com/beanone)
-
 <img src="docs/assets/logos/logo.svg" alt="Agentical Logo" width="100%"/>
 
 [![Python Versions](https://img.shields.io/pypi/pyversions/beanone-agentical.svg)](https://pypi.org/project/beanone-agentical/)
-[![License](https://img.shields.io/github/license/beanone/agentical.svg)](https://github.com/beanone/agentical/blob/main/LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/beanone/agentical/blob/main/LICENSE)
 [![Tests](https://github.com/beanone/agentical/actions/workflows/tests.yml/badge.svg)](https://github.com/beanone/agentical/actions/workflows/tests.yml)
 [![Coverage](https://github.com/beanone/agentical/actions/workflows/tests.yml/badge.svg?branch=main&event=push&label=coverage)](https://github.com/beanone/agentical/actions/workflows/tests.yml)
 [![Code Quality](https://github.com/beanone/agentical/actions/workflows/tests.yml/badge.svg?branch=main&event=push&label=code+quality)](https://github.com/beanone/agentical/actions/workflows/tests.yml)
 [![PyPI version](https://badge.fury.io/py/beanone-agentical.svg)](https://badge.fury.io/py/beanone-agentical)
 
-# Agentical: MCP-Compliant LLM Integration Framework
+# Agentical: MCP-Compliant LLM Integration Framework <a href="https://github.com/beanone"><img src="https://avatars.githubusercontent.com/u/19966751?s=400&u=c06156f8fcfafedcfeb1bb2f9cca36feb3b4395a&v=4" height="35" align="right"/></a>
 
 A robust Python framework for integrating Large Language Models (LLMs) with tools using the Model Context Protocol (MCP). This implementation provides a clean, type-safe, and maintainable way to connect LLMs with external tools and data sources.
 
@@ -81,7 +79,7 @@ pip install beanone-agentical
    OPENAI_API_KEY=your_openai_key  # If using OpenAI backend
    # or
    GEMINI_API_KEY=your_gemini_key  # If using Gemini backend
-   
+
    # Optional LLM configuration
    OPENAI_MODEL=gpt-4-turbo-preview  # Default model for OpenAI
    GEMINI_MODEL=gemini-pro          # Default model for Gemini
@@ -118,7 +116,7 @@ pip install beanone-agentical
    ```bash
    # Run with OpenAI backend
    python demo_openai.py
-   
+
    # Or with custom configuration
    python demo_openai.py -c custom_config.json
    ```
@@ -153,7 +151,7 @@ The LLM will automatically select the appropriate tool based on the query when m
 
 
   if __name__ == "__main__":
-      asyncio.run(main()) 
+      asyncio.run(main())
   ```
 
 ## Multiple MCP Server Usage
@@ -284,17 +282,17 @@ graph TD
     subgraph LLM_Layer[LLM Layer - Choose Your Provider]
         LLMBackend["LLMBackend (Interface)"]
         Adapter[SchemaAdapter]
-        
+
         Gemini[GeminiBackend]
         OpenAI[OpenAIBackend]
         Anthropic[AnthropicBackend]
-        
+
         LLMBackend --> Gemini
         LLMBackend --> OpenAI
         LLMBackend --> Anthropic
         Adapter -.- Anthropic
         Provider --> LLMBackend
-        
+
         note2[Different LLM implementations:<br/>- OpenAI GPT<br/>- Google Gemini<br/>- Anthropic Claude]
         note2 -.-> LLMBackend
     end
@@ -359,7 +357,7 @@ The framework includes several example MCP servers to demonstrate how easily new
 #### Terminal Server
 - **Purpose**: Execute shell commands in a controlled workspace
 - **Tool**: `run_command`
-- **Configuration**: 
+- **Configuration**:
   - `WORKSPACE_DIR`: Optional, defaults to `~/mcp/workspace`
 
 #### Filesystem Server
@@ -538,4 +536,4 @@ pip install -r requirements-dev.txt
 ## Acknowledgments
 
 - Built on the [Model Context Protocol](https://modelcontextprotocol.io/)
-- Uses the official [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) 
+- Uses the official [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk)
