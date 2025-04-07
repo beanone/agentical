@@ -1,0 +1,61 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install pytest pytest-cov coverage-badge ruff
+        if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+        
+    - name: Run Ruff
+      run: |
+        ruff check . --output-format=github
+        ruff format --check .
+        echo "RUFF_EXIT_CODE=$?" >> $GITHUB_ENV
+        
+    - name: Generate code quality badge
+      run: |
+        if [ "$RUFF_EXIT_CODE" = "0" ]; then
+          COLOR="brightgreen"
+          STATUS="passing"
+        else
+          COLOR="red"
+          STATUS="failing"
+        fi
+        echo "<svg xmlns='http://www.w3.org/2000/svg' width='112' height='20'><linearGradient id='b' x2='0' y2='100%'><stop offset='0' stop-color='#bbb' stop-opacity='.1'/><stop offset='1' stop-opacity='.1'/></linearGradient><mask id='a'><rect width='112' height='20' rx='3' fill='#fff'/></mask><g mask='url(#a)'><path fill='#555' d='M0 0h76v20H0z'/><path fill='#$COLOR' d='M76 0h36v20H76z'/><path fill='url(#b)' d='M0 0h112v20H0z'/></g><g fill='#fff' text-anchor='middle' font-family='DejaVu Sans,Verdana,Geneva,sans-serif' font-size='11'><text x='38' y='15' fill='#010101' fill-opacity='.3'>code quality</text><text x='38' y='14'>code quality</text><text x='93' y='15' fill='#010101' fill-opacity='.3'>$STATUS</text><text x='93' y='14'>$STATUS</text></g></svg>" > code_quality.svg
+
+    - name: Run tests with coverage
+      run: |
+        pytest --cov=./ --cov-report=xml --cov-report=term
+        coverage-badge -o coverage.svg -f
+        
+    - name: Commit badges
+      if: github.ref == 'refs/heads/main'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add coverage.svg code_quality.svg
+        git commit -m "Update badges" || exit 0
+        git push 
