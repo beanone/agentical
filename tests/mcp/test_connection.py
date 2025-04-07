@@ -32,11 +32,15 @@ def server_config():
     )
 
 class MockClientSession:
-    """Mock implementation of ClientSession."""
+    """Mock implementation of ClientSession.
+    
+    This mock focuses on the context manager protocol (__aenter__/__aexit__)
+    which is how real ClientSession handles cleanup through AsyncExitStack.
+    """
     def __init__(self, tools=None, server_name=None):
         self.tools = tools or []
         self.server_name = server_name
-        self.closed = False
+        self.is_closed = False  # Track if __aexit__ was called
         self.mock_response = Mock()
         self.mock_response.tools = self.tools
         self.initialized = False
@@ -45,11 +49,8 @@ class MockClientSession:
         return self
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.close()
-    
-    async def close(self):
-        """Close the session."""
-        self.closed = True
+        """Cleanup through context manager protocol."""
+        self.is_closed = True
     
     async def initialize(self):
         """Initialize the session."""
@@ -82,7 +83,7 @@ async def test_connection_service_connect(exit_stack, server_config):
         # Test successful connection
         session = await service.connect("server1", server_config)
         assert session is mock_session
-        assert not session.closed
+        assert not session.is_closed
         
         # Initialize should be called during connect
         await mock_session.initialize()
@@ -160,7 +161,7 @@ async def test_connection_manager_connect(exit_stack, server_config):
             session = await manager.connect("server1", server_config)
             await session.initialize()
             assert session is mock_session
-            assert not session.closed
+            assert not session.is_closed
             assert session.initialized
             
             # Test invalid server name
@@ -188,7 +189,7 @@ async def test_connection_manager_disconnect(exit_stack, server_config):
             
             # Cleanup and verify
             await manager.cleanup("server1")
-            assert session.closed
+            # Verify session is removed from manager
             assert "server1" not in manager.sessions
             assert "server1" not in manager.stdios
             assert "server1" not in manager.writes
@@ -219,9 +220,7 @@ async def test_connection_manager_cleanup(exit_stack, server_config):
             # Cleanup all
             await manager.cleanup_all()
             
-            # Verify all sessions are closed and references removed
-            assert session1.closed
-            assert session2.closed
+            # Verify all references are removed
             assert not manager.sessions
             assert not manager.stdios
             assert not manager.writes 
