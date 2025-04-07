@@ -2,9 +2,9 @@
 
 [![Python Versions](https://img.shields.io/pypi/pyversions/beanone-agentical.svg)](https://pypi.org/project/beanone-agentical/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/beanone/agentical/blob/main/LICENSE)
-[![Tests](docs/assets/badges/tests.svg)](htmlcov/index.html)
-[![Coverage](docs/assets/badges/coverage.svg)](htmlcov/index.html)
-[![Code Quality](docs/assets/badges/quality.svg)](htmlcov/index.html)
+[![Tests](https://github.com/beanone/agentical/actions/workflows/tests.yml/badge.svg?python=3.12)](https://github.com/beanone/agentical/actions/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/beanone/agentical/branch/main/graph/badge.svg?token=YOUR_CODECOV_TOKEN)](https://codecov.io/gh/beanone/agentical)
+[![Code Quality](https://img.shields.io/badge/code%20quality-ruff-green.svg)](https://github.com/astral-sh/ruff)
 [![PyPI version](https://badge.fury.io/py/beanone-agentical.svg)](https://badge.fury.io/py/beanone-agentical)
 
 # Agentical: MCP-Compliant LLM Integration Framework
