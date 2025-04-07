@@ -208,6 +208,10 @@ The framework follows a clean, layered architecture:
 └─────────────────┘
 ```
 
+For detailed information about specific components:
+
+- [Provider Architecture](docs/provider_architecture.md) - Detailed documentation about the LLM provider system
+
 Here is  a more detailed view of the system architecture and component relationships:
 
 
@@ -268,23 +272,17 @@ graph TD
         CustomTools --> Tools
     end
 
-    classDef userLayer fill:#e6ffe6,stroke:#333,stroke-width:5px,color:#000,font-weight:900,font-size:18px
-    classDef note fill:#ffd6d6,stroke:#662222,stroke-width:2px,color:#662222
-    classDef implementation fill:#fffbe6,stroke:#333,stroke-width:2px,color:#664400,font-weight:bold
-    classDef link fill:#fffbe6,stroke:#333,stroke-width:2px,color:#664400,font-weight:bold
+    classDef default fill:#1a1a1a,stroke:#333,stroke-width:2px,color:#fff;
+    classDef focus fill:#4a148c,stroke:#4a148c,stroke-width:2px,color:#fff;
+    classDef active fill:#1b5e20,stroke:#1b5e20,stroke-width:2px,color:#fff;
+    classDef note fill:#ffd6d6,stroke:#662222,stroke-width:2px,color:#662222;
+    classDef link fill:#1a1a1a,stroke:#0288d1,stroke-width:3px,color:#29b6f6,font-weight:bold;
 
-    class Application_Layer userLayer
-    class LLMBackend interface
-    class note1 note
-    class note2 note
-    class note3 note
-    class Gemini implementation
-    class OpenAI implementation
-    class Anthropic implementation
-    class Adapter implementation
-    class GlamaLink link
-    class SmitheryLink link
-    class CustomTools link
+    class App,Chat,MCP,Session,Config,Adapter,Gemini,OpenAI,Anthropic,Tools default;
+    class Provider,LLMBackend focus;
+    class note1,note2,note3 note;
+    class Application_Layer active;
+    class GlamaLink,SmitheryLink,CustomTools link;
 
     click GlamaLink "https://glama.ai/mcp/servers" _blank
     click SmitheryLink "https://smithery.ai" _blank

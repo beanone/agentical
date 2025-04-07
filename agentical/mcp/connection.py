@@ -1,5 +1,8 @@
 """Connection management for MCP servers.
 
+This module provides a unified connection management system for MCP servers,
+handling both connection lifecycle and health monitoring.
+
 This module provides a centralized connection management system for MCP (Machine Control Protocol) servers.
 It handles both WebSocket and stdio-based connections, with features including:
 - Automatic connection retry with exponential backoff
@@ -36,16 +39,16 @@ Implementation Notes:
     - Provides comprehensive error handling and logging
 """
 
-import asyncio
 import logging
 from contextlib import AsyncExitStack
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Tuple, Optional
 
 import backoff
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from agentical.mcp.schemas import ServerConfig
+from agentical.mcp.health import HealthMonitor, ServerReconnector, ServerCleanupHandler, ServerHealth
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +65,7 @@ class MCPConnectionManager:
         sessions (Dict[str, ClientSession]): Active server sessions
         stdios (Dict[str, Any]): stdio transport handlers
         writes (Dict[str, Any]): Write transport handlers
+        _configs (Dict[str, ServerConfig]): Store configs for reconnection
         
     Implementation Notes:
         - Uses AsyncExitStack for proper async context management
@@ -104,7 +108,19 @@ class MCPConnectionManager:
         self.sessions: Dict[str, ClientSession] = {}
         self.stdios: Dict[str, Any] = {}
         self.writes: Dict[str, Any] = {}
+        self._configs: Dict[str, ServerConfig] = {}  # Store configs for reconnection
         
+    def get_config(self, server_name: str) -> Optional[ServerConfig]:
+        """Get the stored configuration for a server.
+        
+        Args:
+            server_name: Name of the server
+            
+        Returns:
+            The server configuration if it exists, None otherwise
+        """
+        return self._configs.get(server_name)
+
     @backoff.on_exception(
         backoff.expo,
         (ConnectionError, TimeoutError),
@@ -178,10 +194,15 @@ class MCPConnectionManager:
             - Connections are automatically retried on failure
             - Resources are properly cleaned up on failure
         """
+        if not server_name:
+            raise ValueError("Server name cannot be empty")
+            
         if server_name in self.sessions:
             raise ValueError(f"Server {server_name} is already connected")
             
         try:
+            # Store config for potential reconnection
+            self._configs[server_name] = config
             return await self._handle_connection(server_name, config)
         except Exception as e:
             logger.error("Failed to connect to server %s: %s", server_name, str(e))
@@ -238,15 +259,28 @@ class MCPConnectionManager:
         logger.debug("Cleaning up resources for server: %s", server_name)
         
         try:
-            # Remove references to resources - actual cleanup is handled by AsyncExitStack
+            # Close session if it exists
             if server_name in self.sessions:
+                session = self.sessions[server_name]
+                await session.close()
                 del self.sessions[server_name]
             
+            # Close stdio if it exists
             if server_name in self.stdios:
+                stdio = self.stdios[server_name]
+                if hasattr(stdio, 'close'):
+                    await stdio.close()
                 del self.stdios[server_name]
             
+            # Close write if it exists
             if server_name in self.writes:
+                write = self.writes[server_name]
+                if hasattr(write, 'close'):
+                    await write.close()
                 del self.writes[server_name]
+                
+            if server_name in self._configs:
+                del self._configs[server_name]
             
         except Exception as e:
             logger.error("Error during cleanup for %s: %s", server_name, str(e))
@@ -268,36 +302,130 @@ class MCPConnectionManager:
             - Handles cleanup errors gracefully
             - Cleans up all server resources
         """
-        logger.debug("Starting cleanup of all servers")
-        
-        # Get list of servers to clean up
-        servers = list(self.sessions.keys())
+        logger.debug("Cleaning up all server resources")
         
         try:
-            # Clean up each server
-            for server_name in servers:
-                try:
-                    await self.cleanup(server_name)
-                except Exception as e:
-                    logger.error("Error cleaning up server %s: %s", server_name, str(e))
-            
-            # Close the exit stack
-            try:
-                await self.exit_stack.aclose()
-                logger.debug("Exit stack closed successfully")
-            except asyncio.CancelledError:
-                # Handle task cancellation gracefully
-                logger.info("Task cancelled during exit stack cleanup")
-                # Ensure the exit stack is closed even if cancelled
-                await self.exit_stack.aclose()
-            except Exception as e:
-                logger.error("Error closing exit stack: %s", str(e))
+            # Close all sessions
+            for server_name in list(self.sessions.keys()):
+                await self.cleanup(server_name)
                 
-        except Exception as e:
-            logger.error("Error during cleanup_all: %s", str(e))
-        finally:
-            # Clear all remaining references
+            # Clear all references - actual cleanup handled by AsyncExitStack
             self.sessions.clear()
             self.stdios.clear()
             self.writes.clear()
-            logger.debug("All server resources cleaned up") 
+            self._configs.clear()
+            logger.debug("All server resources cleaned up")
+        except Exception as e:
+            logger.error("Error during cleanup_all: %s", str(e))
+
+class MCPConnectionService(ServerReconnector, ServerCleanupHandler):
+    """Unified service for managing MCP server connections and health.
+    
+    This class provides a high-level interface for managing server connections,
+    including health monitoring and automatic recovery. It encapsulates both
+    the connection management and health monitoring concerns.
+    
+    Example:
+        ```python
+        async with AsyncExitStack() as stack:
+            service = MCPConnectionService(stack)
+            try:
+                session = await service.connect("my_server", config)
+                # Use session...
+            finally:
+                await service.disconnect("my_server")
+        ```
+    """
+    
+    # Health monitoring settings
+    HEARTBEAT_INTERVAL = 30  # seconds
+    MAX_HEARTBEAT_MISS = 2
+    
+    def __init__(self, exit_stack: AsyncExitStack):
+        """Initialize the connection service.
+        
+        Args:
+            exit_stack: AsyncExitStack for managing async context resources
+        """
+        self._connection_manager = MCPConnectionManager(exit_stack)
+        self._health_monitor = HealthMonitor(
+            heartbeat_interval=self.HEARTBEAT_INTERVAL,
+            max_heartbeat_miss=self.MAX_HEARTBEAT_MISS,
+            reconnector=self,
+            cleanup_handler=self
+        )
+        
+    async def connect(self, server_name: str, config: ServerConfig) -> ClientSession:
+        """Connect to an MCP server with health monitoring.
+        
+        Args:
+            server_name: Name of the server to connect to
+            config: Server configuration
+            
+        Returns:
+            The established ClientSession
+            
+        Raises:
+            ConnectionError: If connection fails
+            ValueError: If server name is empty
+        """
+        if not server_name:
+            raise ValueError("Server name cannot be empty")
+            
+        try:
+            # Register with health monitor first
+            self._health_monitor.register_server(server_name)
+            
+            # Establish connection
+            session = await self._connection_manager.connect(server_name, config)
+            
+            # Update health status
+            self._health_monitor.update_heartbeat(server_name)
+            
+            # Start monitoring if not already started
+            self._health_monitor.start_monitoring()
+            
+            return session
+            
+        except Exception as e:
+            self._health_monitor.mark_connection_failed(server_name, str(e))
+            raise
+            
+    async def disconnect(self, server_name: str) -> None:
+        """Disconnect from a server and clean up resources.
+        
+        Args:
+            server_name: Name of the server to disconnect
+        """
+        await self.cleanup(server_name)
+        
+    async def cleanup(self, server_name: str) -> None:
+        """Implement ServerCleanupHandler protocol."""
+        await self._connection_manager.cleanup(server_name)
+        
+    async def reconnect(self, server_name: str) -> bool:
+        """Implement ServerReconnector protocol."""
+        try:
+            if server_name in self._connection_manager.sessions:
+                config = self._connection_manager.get_config(server_name)
+                if config:
+                    await self.cleanup(server_name)
+                    await self.connect(server_name, config)
+                    return True
+            return False
+        except Exception:
+            return False
+            
+    def get_session(self, server_name: str) -> Optional[ClientSession]:
+        """Get the active session for a server if it exists."""
+        return self._connection_manager.sessions.get(server_name)
+        
+    @property
+    def active_sessions(self) -> Dict[str, ClientSession]:
+        """Get all active sessions."""
+        return self._connection_manager.sessions.copy()
+        
+    async def cleanup_all(self) -> None:
+        """Clean up all connections and stop health monitoring."""
+        self._health_monitor.stop_monitoring()
+        await self._connection_manager.cleanup_all() 

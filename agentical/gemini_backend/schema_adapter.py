@@ -2,7 +2,6 @@
 
 from typing import Any, Dict, List, Set, Optional
 
-from google import genai
 from google.genai.types import Tool as GeminiTool
 from google.genai.types import FunctionDeclaration, Content, Part
 from mcp.types import Tool as MCPTool

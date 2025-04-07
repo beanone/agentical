@@ -7,10 +7,10 @@ import time
 import traceback
 from typing import Any, Dict, List, Optional, Callable
 
-from anthropic import AsyncAnthropic
+import anthropic
 
 from agentical.api.llm_backend import LLMBackend
-from agentical.utils.log_utils import redact_sensitive_data, sanitize_log_message
+from agentical.utils.log_utils import sanitize_log_message
 from mcp.types import Tool as MCPTool
 from mcp.types import CallToolResult
 
@@ -42,13 +42,13 @@ class AnthropicBackend(LLMBackend):
             raise ValueError("ANTHROPIC_API_KEY not found. Please provide it or set in environment.")
             
         try:
-            self.client = AsyncAnthropic(api_key=api_key)
+            self.client = anthropic.AsyncAnthropic(api_key=api_key)
             self.model = os.getenv("ANTHROPIC_MODEL", self.DEFAULT_MODEL)
             self.schema_adapter = SchemaAdapter()
-            logger.info("Initialized Anthropic client", extra=redact_sensitive_data({
+            logger.info("Initialized Anthropic client", extra={
                 "model": self.model,
                 "api_key_length": len(api_key)
-            }))
+            })
         except Exception as e:
             error_msg = sanitize_log_message(f"Failed to initialize Anthropic client: {str(e)}")
             logger.error(error_msg, exc_info=True)
@@ -88,11 +88,11 @@ class AnthropicBackend(LLMBackend):
         """
         start_time = time.time()
         try:
-            logger.info("Processing query", extra=redact_sensitive_data({
+            logger.info("Processing query", extra={
                 "query": query,
                 "num_tools": len(tools),
                 "has_context": context is not None
-            }))
+            })
             # Initialize or use existing conversation context
             messages = list(context) if context else []
             

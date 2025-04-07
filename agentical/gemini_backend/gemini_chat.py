@@ -6,10 +6,9 @@ import time
 from typing import Any, Dict, List, Optional, Callable
 
 from google import genai
-from google.genai.types import Content
 
 from agentical.api.llm_backend import LLMBackend
-from agentical.utils.log_utils import redact_sensitive_data, sanitize_log_message
+from agentical.utils.log_utils import sanitize_log_message
 from mcp.types import Tool as MCPTool
 from mcp.types import CallToolResult
 
@@ -41,10 +40,10 @@ class GeminiBackend(LLMBackend):
             self.client = genai.Client(api_key=api_key)
             self.model = os.getenv("GEMINI_MODEL", self.DEFAULT_MODEL)
             self.schema_adapter = SchemaAdapter()
-            logger.info("Initialized Gemini client", extra=redact_sensitive_data({
+            logger.info("Initialized Gemini client", extra={
                 "model": self.model,
                 "api_key_length": len(api_key)
-            }))
+            })
         except Exception as e:
             error_msg = sanitize_log_message(f"Failed to initialize Gemini client: {str(e)}")
             logger.error(error_msg, exc_info=True)
@@ -96,11 +95,11 @@ class GeminiBackend(LLMBackend):
         """
         start_time = time.time()
         try:
-            logger.info("Processing query", extra=redact_sensitive_data({
+            logger.info("Processing query", extra={
                 "query": query,
                 "num_tools": len(tools),
                 "has_context": context is not None
-            }))
+            })
             # Convert query to Gemini format and prepare contents
             contents = context or []
             contents.append(self.schema_adapter.create_user_content(query))

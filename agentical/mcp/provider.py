@@ -47,42 +47,22 @@ Implementation Notes:
 import logging
 import time
 from typing import Dict, Optional, List, Any, Tuple
-import asyncio
 
 from contextlib import AsyncExitStack
-from mcp import ClientSession
-from mcp.types import Tool as MCPTool
+
 from mcp.types import CallToolResult
 
 from agentical.api import LLMBackend
-from agentical.mcp.health import HealthMonitor, ServerReconnector, ServerCleanupHandler
 from agentical.mcp.schemas import ServerConfig
-from agentical.mcp.connection import MCPConnectionManager
+from agentical.mcp.connection import MCPConnectionService
 from agentical.mcp.config import MCPConfigProvider, DictBasedMCPConfigProvider
-from agentical.utils.log_utils import redact_sensitive_data, sanitize_log_message
+from agentical.mcp.tool_registry import ToolRegistry
+from agentical.utils.log_utils import sanitize_log_message
 
 logger = logging.getLogger(__name__)
 
-class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
-    """Main facade for integrating LLMs with MCP tools.
-    
-    This class follows the architecture diagram's Integration Layer, coordinating
-    between the LLM Layer and MCP Layer. It manages server connections, tool
-    discovery, and query processing while ensuring robust operation through
-    health monitoring and automatic recovery.
-    
-    Attributes:
-        HEARTBEAT_INTERVAL (int): Time in seconds between health checks
-        MAX_HEARTBEAT_MISS (int): Maximum missed heartbeats before reconnection
-        connection_manager (MCPConnectionManager): Manages server connections
-        available_servers (Dict[str, ServerConfig]): Available server configurations
-        tools_by_server (Dict[str, List[MCPTool]]): Tools indexed by server
-        all_tools (List[MCPTool]): Combined list of all available tools
-    """
-    
-    # Health monitoring settings
-    HEARTBEAT_INTERVAL = 30  # seconds
-    MAX_HEARTBEAT_MISS = 2
+class MCPToolProvider:
+    """Main facade for integrating LLMs with MCP tools."""
     
     def __init__(
         self, 
@@ -90,17 +70,7 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
         config_provider: Optional[MCPConfigProvider] = None,
         server_configs: Optional[Dict[str, ServerConfig]] = None
     ):
-        """Initialize the MCP Tool Provider.
-        
-        Args:
-            llm_backend: LLMBackend instance for processing queries
-            config_provider: Optional provider for loading configurations
-            server_configs: Optional direct server configurations
-            
-        Raises:
-            TypeError: If llm_backend is None or invalid type
-            ValueError: If neither config_provider nor server_configs is provided
-        """
+        """Initialize the MCP Tool Provider."""
         start_time = time.time()
         logger.info("Initializing MCPToolProvider", extra={
             "llm_backend_type": type(llm_backend).__name__,
@@ -120,41 +90,23 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
             raise ValueError("Either config_provider or server_configs must be provided")
             
         self.exit_stack = AsyncExitStack()
-        self.connection_manager = MCPConnectionManager(self.exit_stack)
+        self.connection_service = MCPConnectionService(self.exit_stack)
         self.available_servers: Dict[str, ServerConfig] = {}
         self.llm_backend = llm_backend
-        self.tools_by_server: Dict[str, List[MCPTool]] = {}
-        self.all_tools: List[MCPTool] = []
+        self.tool_registry = ToolRegistry()
         
         # Store configuration source
         self.config_provider = config_provider
         if server_configs:
             self.config_provider = DictBasedMCPConfigProvider(server_configs)
         
-        # Initialize health monitor
-        self.health_monitor = HealthMonitor(
-            heartbeat_interval=self.HEARTBEAT_INTERVAL,
-            max_heartbeat_miss=self.MAX_HEARTBEAT_MISS,
-            reconnector=self,
-            cleanup_handler=self
-        )
-        
         duration = time.time() - start_time
         logger.info("MCPToolProvider initialized", extra={
-            "duration_ms": int(duration * 1000),
-            "heartbeat_interval": self.HEARTBEAT_INTERVAL,
-            "max_heartbeat_miss": self.MAX_HEARTBEAT_MISS
+            "duration_ms": int(duration * 1000)
         })
     
     async def initialize(self) -> None:
-        """Initialize the provider with configurations.
-        
-        This method must be called before attempting to connect to any servers
-        or process queries.
-        
-        Raises:
-            ConfigurationError: If configuration loading fails
-        """
+        """Initialize the provider with configurations."""
         start_time = time.time()
         logger.info("Loading provider configurations")
         
@@ -175,15 +127,7 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
             raise
 
     def list_available_servers(self) -> List[str]:
-        """List all available MCP servers from the loaded configuration.
-        
-        Returns:
-            List of server names that are available for connection.
-            
-        Note:
-            This only lists servers that have been configured, not necessarily
-            ones that are currently connected.
-        """
+        """List all available MCP servers from the loaded configuration."""
         servers = list(self.available_servers.keys())
         logger.debug("Listing available servers", extra={
             "num_servers": len(servers),
@@ -191,243 +135,8 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
         })
         return servers
 
-    async def reconnect(self, server_name: str) -> bool:
-        """Implement ServerReconnector protocol.
-        
-        Attempts to reconnect to a server that has been disconnected or is
-        experiencing connection issues. This is typically called by the
-        health monitor when connection problems are detected.
-        
-        Args:
-            server_name: Name of the server to reconnect to
-            
-        Returns:
-            bool: True if reconnection was successful, False otherwise
-            
-        Note:
-            - Updates tool registry after successful reconnection
-            - Updates health monitor state
-            - Handles cleanup on failed reconnection attempts
-        """
-        start_time = time.time()
-        logger.info("Attempting server reconnection", extra={
-            "server_name": server_name
-        })
-        
-        try:
-            if server_name in self.available_servers:
-                config = self.available_servers[server_name]
-                session = await self.connection_manager.connect(server_name, config)
-                
-                # Initialize and get tools
-                response = await session.list_tools()
-                
-                # Update health monitor
-                self.health_monitor.update_heartbeat(server_name)
-                
-                # Store MCP tools for this server
-                self.tools_by_server[server_name] = response.tools
-                self.all_tools.extend(response.tools)
-                
-                tool_names = [tool.name for tool in response.tools]
-                duration = time.time() - start_time
-                logger.info("Server reconnection successful", extra={
-                    "server_name": server_name,
-                    "num_tools": len(tool_names),
-                    "tool_names": tool_names,
-                    "duration_ms": int(duration * 1000)
-                })
-                
-                # Start health monitoring
-                self.health_monitor.start_monitoring()
-                return True
-        except Exception as e:
-            duration = time.time() - start_time
-            logger.error("Server reconnection failed", extra={
-                "server_name": server_name,
-                "error": sanitize_log_message(str(e)),
-                "duration_ms": int(duration * 1000)
-            })
-            return False
-        return False
-
-    async def cleanup(self, server_name: str = None) -> None:
-        """Clean up server resources.
-        
-        This method serves two purposes:
-        1. When called with server_name, it implements the ServerCleanupHandler protocol
-           by cleaning up resources for a specific server.
-        2. When called without server_name, it acts as a convenience method to
-           clean up all provider resources.
-        
-        Args:
-            server_name: Optional name of the server to clean up. If not provided,
-                        cleans up all resources.
-            
-        Note:
-            - Implements ServerCleanupHandler protocol when server_name is provided
-            - Calls cleanup_all() when server_name is None
-            - Safe to call multiple times
-            - Handles cleanup errors gracefully
-        """
-        start_time = time.time()
-        if server_name is not None:
-            await self.cleanup_server(server_name)
-        else:
-            await self.cleanup_all()
-        
-        duration = time.time() - start_time
-        logger.info("Cleanup completed", extra={
-            "server_name": server_name if server_name else "all",
-            "duration_ms": int(duration * 1000)
-        })
-
-    async def cleanup_server(self, server_name: str) -> None:
-        """Clean up a specific server's resources.
-        
-        Implements the actual server cleanup logic, removing server tools
-        and cleaning up connection resources.
-        
-        Args:
-            server_name: Name of the server to clean up
-            
-        Note:
-            - Removes server tools from the registry
-            - Cleans up connection resources
-            - Safe to call multiple times
-            - Handles cleanup errors gracefully
-        """
-        start_time = time.time()
-        logger.info("Starting server cleanup", extra={
-            "server_name": server_name
-        })
-        
-        try:
-            # Remove server-specific tools
-            num_tools_removed = 0
-            if server_name in self.tools_by_server:
-                server_tools = self.tools_by_server[server_name]
-                num_tools_removed = len(server_tools)
-                self.all_tools = [t for t in self.all_tools if t not in server_tools]
-                del self.tools_by_server[server_name]
-            
-            # Clean up connection
-            await self.connection_manager.cleanup(server_name)
-            
-            duration = time.time() - start_time
-            logger.info("Server cleanup completed", extra={
-                "server_name": server_name,
-                "num_tools_removed": num_tools_removed,
-                "duration_ms": int(duration * 1000)
-            })
-            
-        except Exception as e:
-            duration = time.time() - start_time
-            logger.error("Server cleanup failed", extra={
-                "server_name": server_name,
-                "error": sanitize_log_message(str(e)),
-                "duration_ms": int(duration * 1000)
-            })
-
-    async def cleanup_all(self) -> None:
-        """Clean up all provider resources.
-        
-        This is the main cleanup method for the provider, cleaning up all
-        resources including servers, connections, and internal state.
-        
-        Note:
-            - Calls cleanup_all() internally
-            - Safe to call multiple times
-            - Handles cleanup errors gracefully
-            - Ensures proper task cancellation
-        """
-        start_time = time.time()
-        logger.info("Starting provider cleanup")
-        
-        try:
-            # First stop health monitoring to prevent reconnection attempts
-            if hasattr(self, 'health_monitor'):
-                try:
-                    self.health_monitor.stop_monitoring()
-                    logger.debug("Health monitoring stopped")
-                except Exception as e:
-                    logger.error("Failed to stop health monitor", extra={
-                        "error": sanitize_log_message(str(e))
-                    })
-            
-            # Clean up all connections
-            if hasattr(self, 'connection_manager'):
-                try:
-                    await self.connection_manager.cleanup_all()
-                    logger.debug("All connections cleaned up")
-                except Exception as e:
-                    logger.error("Failed to cleanup connections", extra={
-                        "error": sanitize_log_message(str(e))
-                    })
-            
-            # Close the exit stack last
-            if hasattr(self, 'exit_stack'):
-                try:
-                    # Create a task group for cleanup
-                    async with asyncio.TaskGroup() as tg:
-                        # Cancel any pending tasks
-                        tasks = [task for task in asyncio.all_tasks() 
-                                if task is not asyncio.current_task()]
-                        for task in tasks:
-                            task.cancel()
-                        
-                        # Create a task for closing the exit stack
-                        tg.create_task(self.exit_stack.aclose())
-                    logger.debug("Exit stack closed")
-                except* asyncio.CancelledError:
-                    logger.info("Tasks cancelled during cleanup")
-                except* Exception as e:
-                    logger.error("Failed to close exit stack", extra={
-                        "error": sanitize_log_message(str(e))
-                    })
-                
-        except Exception as e:
-            logger.error("Provider cleanup failed", extra={
-                "error": sanitize_log_message(str(e))
-            })
-            
-        finally:
-            # Clear all stored references
-            num_tools = len(self.all_tools) if hasattr(self, 'all_tools') else 0
-            num_servers = len(self.tools_by_server) if hasattr(self, 'tools_by_server') else 0
-            
-            if hasattr(self, 'tools_by_server'):
-                self.tools_by_server.clear()
-            if hasattr(self, 'all_tools'):
-                self.all_tools.clear()
-                
-            duration = time.time() - start_time
-            logger.info("Provider cleanup completed", extra={
-                "num_tools_cleared": num_tools,
-                "num_servers_cleared": num_servers,
-                "duration_ms": int(duration * 1000)
-            })
-
-    async def mcp_connect(self, server_name: str):
-        """Connect to a specific MCP server by name.
-        
-        Establishes a connection to a server and initializes its tools.
-        This is the main method for connecting to individual servers.
-        
-        Args:
-            server_name: Name of the server as defined in the configuration.
-                       Must be a non-empty string matching a configured server.
-            
-        Raises:
-            ValueError: If server_name is invalid or not found in configuration
-            ConnectionError: If connection fails after retries
-            
-        Note:
-            - Registers server with health monitor
-            - Updates tool registry on successful connection
-            - Handles cleanup on failed connection attempts
-            - Starts health monitoring if not already started
-        """
+    async def mcp_connect(self, server_name: str) -> None:
+        """Connect to a specific MCP server by name."""
         start_time = time.time()
         logger.info("Connecting to server", extra={
             "server_name": server_name
@@ -446,22 +155,15 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
             })
             raise ValueError(f"Unknown server: {server_name}. Available servers: {self.list_available_servers()}")
             
-        # Register with health monitor
-        self.health_monitor.register_server(server_name)
-        
         try:
-            # Connect using connection manager
-            session = await self.connection_manager.connect(server_name, self.available_servers[server_name])
+            # Connect using connection service
+            session = await self.connection_service.connect(server_name, self.available_servers[server_name])
             
             # Initialize and get tools
             response = await session.list_tools()
             
-            # Update health monitor
-            self.health_monitor.update_heartbeat(server_name)
-            
-            # Store MCP tools for this server
-            self.tools_by_server[server_name] = response.tools
-            self.all_tools.extend(response.tools)
+            # Register tools
+            self.tool_registry.register_server_tools(server_name, response.tools)
             
             tool_names = [tool.name for tool in response.tools]
             duration = time.time() - start_time
@@ -471,9 +173,6 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
                 "tool_names": tool_names,
                 "duration_ms": int(duration * 1000)
             })
-            
-            # Start health monitoring
-            self.health_monitor.start_monitoring()
             
         except Exception as e:
             duration = time.time() - start_time
@@ -486,31 +185,7 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
             raise ConnectionError(f"Failed to connect to server '{server_name}': {str(e)}")
 
     async def mcp_connect_all(self) -> List[Tuple[str, Optional[Exception]]]:
-        """Connect to all available MCP servers concurrently.
-        
-        Attempts to connect to all configured servers, collecting results
-        and errors for each connection attempt.
-        
-        Returns:
-            List of tuples containing:
-                - str: Server name
-                - Optional[Exception]: None if successful, Exception if failed
-            
-        Note:
-            - Connects to servers sequentially to avoid context issues
-            - Returns partial success if some connections fail
-            - Does not raise exceptions for individual failures
-            
-        Example:
-            ```python
-            results = await provider.mcp_connect_all()
-            for server_name, error in results:
-                if error:
-                    print(f"Failed to connect to {server_name}: {error}")
-                else:
-                    print(f"Successfully connected to {server_name}")
-            ```
-        """
+        """Connect to all available MCP servers concurrently."""
         start_time = time.time()
         servers = self.list_available_servers()
         logger.info("Connecting to all servers", extra={
@@ -548,73 +223,191 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
         })
         return results
 
-    async def process_query(self, query: str) -> str:
-        """Process a user query using the configured LLM backend.
+    async def cleanup_server(self, server_name: str) -> None:
+        """Clean up a specific server's resources."""
+        start_time = time.time()
+        logger.info("Starting server cleanup", extra={
+            "server_name": server_name
+        })
         
-        Routes the query through the LLM backend, providing access to all
-        available tools across connected servers. The LLM can choose which
-        tools to use and how to combine them to answer the query.
+        try:
+            # Remove server tools
+            num_tools_removed = self.tool_registry.remove_server_tools(server_name)
+            
+            # Clean up connection
+            await self.connection_service.disconnect(server_name)
+            
+            duration = time.time() - start_time
+            logger.info("Server cleanup completed", extra={
+                "server_name": server_name,
+                "num_tools_removed": num_tools_removed,
+                "remaining_tools": len(self.tool_registry.all_tools),
+                "duration_ms": int(duration * 1000)
+            })
+            
+        except Exception as e:
+            duration = time.time() - start_time
+            logger.error("Server cleanup failed", extra={
+                "server_name": server_name,
+                "error": sanitize_log_message(str(e)),
+                "duration_ms": int(duration * 1000)
+            })
+
+    async def reconnect(self, server_name: str) -> bool:
+        """Reconnect to a server and re-register its tools.
         
         Args:
-            query: The user's input query to process
+            server_name: Name of the server to reconnect to
             
         Returns:
-            The response generated by the LLM
+            bool: True if reconnection was successful, False otherwise
+        """
+        try:
+            if server_name not in self.available_servers:
+                logger.warning(f"Cannot reconnect to unknown server: {server_name}")
+                return False
             
-        Raises:
-            ValueError: If no servers are connected
-            Exception: If query processing fails
+            # First clean up any existing tools for this server
+            await self.cleanup_server(server_name)
             
+            # Get the server config
+            config = self.available_servers[server_name]
+            
+            # Attempt to connect using the connection service
+            session = await self.connection_service.connect(server_name, config)
+            
+            # Get and register tools
+            response = await session.list_tools()
+            self.tool_registry.register_server_tools(server_name, response.tools)
+            
+            return True
+        except Exception as e:
+            logger.error(f"Failed to reconnect to server {server_name}: {str(e)}")
+            await self.cleanup_server(server_name)
+            return False
+
+    async def cleanup_all(self) -> None:
+        """Clean up all provider resources.
+        
+        This is the main cleanup method for the provider, cleaning up all
+        resources including servers, connections, and internal state.
+        
         Note:
-            - Automatically routes tool calls to appropriate servers
-            - Handles tool execution errors
-            - Updates health monitoring on successful tool execution
+            - Safe to call multiple times
+            - Handles cleanup errors gracefully
+            - Ensures proper task cancellation
+            - Closes all resources in correct order
         """
         start_time = time.time()
-        logger.info("Processing query", extra=redact_sensitive_data({
-            "query": query,
-            "num_tools_available": len(self.all_tools),
-            "num_servers": len(self.tools_by_server)
-        }))
+        logger.info("Starting provider cleanup")
         
-        if not self.tools_by_server:
+        try:
+            # Clear tool registry first
+            if hasattr(self, 'tool_registry'):
+                num_tools = len(self.tool_registry.all_tools)
+                num_servers = len(self.tool_registry.tools_by_server)
+                num_tools_cleared, num_servers_cleared = self.tool_registry.clear()
+                logger.info(f"Tool registry cleared - {num_tools} tools from {num_servers} servers")
+            
+            # Clean up all connections through the service
+            # This will handle both connection cleanup and health monitoring
+            if hasattr(self, 'connection_service'):
+                await self.connection_service.cleanup_all()
+                logger.info("Connection service cleaned up")
+            
+            # Close the exit stack last
+            if hasattr(self, 'exit_stack'):
+                try:
+                    await self.exit_stack.aclose()
+                    logger.info("Exit stack closed")
+                except Exception as e:
+                    logger.error("Failed to close exit stack", extra={
+                        "error": sanitize_log_message(str(e))
+                    })
+            
+            duration = time.time() - start_time
+            logger.info("Provider cleanup completed", extra={
+                "duration_ms": int(duration * 1000)
+            })
+            
+        except Exception as e:
+            duration = time.time() - start_time
+            logger.error("Provider cleanup failed", extra={
+                "error": sanitize_log_message(str(e)),
+                "duration_ms": int(duration * 1000)
+            })
+            raise
+
+    async def cleanup(self, server_name: str = None) -> None:
+        """Clean up server resources.
+        
+        This method serves two purposes:
+        1. When called with server_name, it cleans up resources for a specific server
+        2. When called without server_name, it cleans up all provider resources
+        
+        Args:
+            server_name: Optional name of the server to clean up. If not provided,
+                        cleans up all resources.
+            
+        Note:
+            - Safe to call multiple times
+            - Handles cleanup errors gracefully
+        """
+        if server_name is not None:
+            await self.cleanup_server(server_name)
+        else:
+            await self.cleanup_all()
+
+    async def process_query(self, query: str) -> str:
+        """Process a user query using the configured LLM backend."""
+        start_time = time.time()
+        logger.info("Processing query", extra={
+            "query": query,
+            "num_tools_available": len(self.tool_registry.all_tools),
+            "num_servers": len(self.tool_registry.tools_by_server)
+        })
+        
+        if not self.tool_registry.tools_by_server:
             logger.error("No active sessions")
             raise ValueError("Not connected to any MCP server. Please select and connect to a server first.")
 
         # Execute tool directly with MCP types
         async def execute_tool(tool_name: str, tool_args: Dict[str, Any]) -> CallToolResult:
             tool_start = time.time()
-            logger.debug("Executing tool", extra=redact_sensitive_data({
+            logger.debug("Executing tool", extra={
                 "tool_name": tool_name,
                 "tool_args": tool_args
-            }))
+            })
             
             # Find which server has this tool
-            for server_name, tools in self.tools_by_server.items():
-                if any(tool.name == tool_name for tool in tools):
-                    logger.debug("Found tool in server", extra={
+            server_name = self.tool_registry.find_tool_server(tool_name)
+            if server_name:
+                logger.debug("Found tool in server", extra={
+                    "tool_name": tool_name,
+                    "server_name": server_name
+                })
+                try:
+                    session = self.connection_service.get_session(server_name)
+                    if not session:
+                        raise ValueError(f"No active session for server {server_name}")
+                        
+                    result = await session.call_tool(tool_name, tool_args)
+                    tool_duration = time.time() - tool_start
+                    logger.debug("Tool execution successful", extra={
                         "tool_name": tool_name,
-                        "server_name": server_name
+                        "server_name": server_name,
+                        "duration_ms": int(tool_duration * 1000)
                     })
-                    try:
-                        session = self.connection_manager.sessions[server_name]
-                        result = await session.call_tool(tool_name, tool_args)
-                        tool_duration = time.time() - tool_start
-                        logger.debug("Tool execution successful", extra={
-                            "tool_name": tool_name,
-                            "server_name": server_name,
-                            "duration_ms": int(tool_duration * 1000)
-                        })
-                        return result
-                    except Exception as e:
-                        tool_duration = time.time() - tool_start
-                        logger.error("Tool execution failed", extra={
-                            "tool_name": tool_name,
-                            "server_name": server_name,
-                            "error": sanitize_log_message(str(e)),
-                            "duration_ms": int(tool_duration * 1000)
-                        })
-                        raise
+                    return result
+                except Exception as e:
+                    tool_duration = time.time() - tool_start
+                    logger.error("Tool execution failed", extra={
+                        "tool_name": tool_name,
+                        "server_name": server_name,
+                        "error": sanitize_log_message(str(e)),
+                        "duration_ms": int(tool_duration * 1000)
+                    })
+                    raise
             
             tool_duration = time.time() - tool_start
             logger.error("Tool not found", extra={
@@ -626,11 +419,11 @@ class MCPToolProvider(ServerReconnector, ServerCleanupHandler):
         try:
             # Process the query using all available tools
             logger.debug("Sending query to LLM backend", extra={
-                "num_tools": len(self.all_tools)
+                "num_tools": len(self.tool_registry.all_tools)
             })
             response = await self.llm_backend.process_query(
                 query=query,
-                tools=self.all_tools,
+                tools=self.tool_registry.all_tools,
                 execute_tool=execute_tool
             )
             duration = time.time() - start_time

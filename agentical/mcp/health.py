@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Dict, Optional, Protocol, Callable, Coroutine, Any
+from typing import Dict, Optional, Protocol
 import time
 from dataclasses import dataclass
 
