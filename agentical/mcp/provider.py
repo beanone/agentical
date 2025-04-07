@@ -167,9 +167,8 @@ class MCPToolProvider:
                 },
             )
             raise ValueError(
-                "Unknown server: {}. Available servers: {}".format(
-                    server_name, self.list_available_servers()
-                )
+                f"Unknown server: {server_name}. "
+                f"Available servers: {self.list_available_servers()}"
             )
 
         try:
@@ -341,11 +340,13 @@ class MCPToolProvider:
             if hasattr(self, "tool_registry"):
                 num_tools = len(self.tool_registry.all_tools)
                 num_servers = len(self.tool_registry.tools_by_server)
-                num_tools_cleared, num_servers_cleared = self.tool_registry.clear()
+                self.tool_registry.clear()
                 logger.info(
-                    "Tool registry cleared - {} tools from {} servers".format(
-                        num_tools, num_servers
-                    )
+                    "Tool registry cleared",
+                    extra={
+                        "num_tools": num_tools,
+                        "num_servers": num_servers,
+                    },
                 )
 
             # Clean up all connections through the service

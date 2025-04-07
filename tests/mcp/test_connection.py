@@ -1,6 +1,6 @@
 """Unit tests for MCP Connection components.
 
-This module contains tests for the MCPConnectionService and MCPConnectionManager 
+This module contains tests for the MCPConnectionService and MCPConnectionManager
 classes, which handle server connections and health monitoring.
 """
 
