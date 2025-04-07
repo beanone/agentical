@@ -1,6 +1,6 @@
 """Schema adapter for converting between MCP and Gemini schemas."""
 
-from typing import Any
+from typing import Any, ClassVar
 
 from google.genai.types import Content, FunctionDeclaration, Part
 from google.genai.types import Tool as GeminiTool
@@ -12,7 +12,7 @@ class SchemaAdapter:
     """Adapter for converting between MCP and Gemini schemas."""
 
     # Fields that are not supported in Gemini's function calling schema
-    UNSUPPORTED_SCHEMA_FIELDS: set[str] = {
+    UNSUPPORTED_SCHEMA_FIELDS: ClassVar[set[str]] = {
         "title",
         "default",
         "$schema",

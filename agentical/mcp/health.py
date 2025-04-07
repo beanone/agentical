@@ -125,7 +125,8 @@ class HealthMonitor:
 
                         if health.consecutive_failures >= self.max_heartbeat_miss:
                             logger.error(
-                                "Server %s connection appears dead. Initiating reconnection.",
+                                "Server %s connection appears dead. "
+                                "Initiating reconnection.",
                                 server_name,
                             )
                             health.is_connected = False

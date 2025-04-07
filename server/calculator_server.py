@@ -32,7 +32,7 @@ class SafeCalculator(ast.NodeVisitor):
             ast.UAdd: operator.pos,  # Unary plus
         }
 
-    def visit_BinOp(self, node: ast.BinOp) -> float:
+    def visit_binop(self, node: ast.BinOp) -> float:
         """Handle binary operations (e.g., 1 + 2, 3 * 4)."""
         left = self.visit(node.left)
         right = self.visit(node.right)
@@ -46,15 +46,15 @@ class SafeCalculator(ast.NodeVisitor):
 
         return op(left, right)
 
-    def visit_Constant(self, node: ast.Constant) -> float:
+    def visit_constant(self, node: ast.Constant) -> float:
         """Handle numeric constants (for Python 3.8+)."""
-        if not isinstance(node.value, (int, float)):
+        if not isinstance(node.value, int | float):
             raise CalculatorError(
                 f"Unsupported constant type: {type(node.value).__name__}"
             )
         return float(node.value)
 
-    def visit_UnaryOp(self, node: ast.UnaryOp) -> float:
+    def visit_unaryop(self, node: ast.UnaryOp) -> float:
         """Handle unary operations (e.g., -1, +2)."""
         operand = self.visit(node.operand)
         op = self.operators.get(type(node.op))
@@ -64,11 +64,11 @@ class SafeCalculator(ast.NodeVisitor):
             )
         return op(operand)
 
-    def visit_Call(self, node: ast.Call) -> float:
+    def visit_call(self, node: ast.Call) -> float:
         """Block function calls for security."""
         raise CalculatorError("Function calls are not allowed")
 
-    def visit_Name(self, node: ast.Name) -> float:
+    def visit_name(self, node: ast.Name) -> float:
         """Block variable names for security."""
         raise CalculatorError("Variables are not allowed")
 

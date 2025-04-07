@@ -413,7 +413,8 @@ class MCPToolProvider:
         if not self.tool_registry.tools_by_server:
             logger.error("No active sessions")
             raise ValueError(
-                "Not connected to any MCP server. Please select and connect to a server first."
+                "Not connected to any MCP server. "
+                "Please select and connect to a server first."
             )
 
         # Execute tool directly with MCP types

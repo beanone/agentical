@@ -153,7 +153,8 @@ def _format_weather_response(data: dict[str, Any], units: str) -> str:
             f"• Temperature: {main['temp']:.1f}{temp_symbol}",
             f"• Feels like: {main['feels_like']:.1f}{temp_symbol}",
             f"• Humidity: {main['humidity']}%",
-            f"• Wind speed: {wind['speed']:.1f} {'m/s' if units == 'metric' else 'mph'}",
+            f"• Wind speed: {wind['speed']:.1f} "
+            f"{'m/s' if units == 'metric' else 'mph'}",
         ]
 
         return "\n".join(lines)

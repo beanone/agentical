@@ -2,7 +2,7 @@
 
 import logging
 import re
-from typing import Any
+from typing import Any, ClassVar
 
 from anthropic.types import Message, MessageParam
 from mcp.types import Tool as MCPTool
@@ -14,7 +14,7 @@ class SchemaAdapter:
     """Adapter for converting between MCP and Anthropic schemas."""
 
     # Fields that are not supported in Anthropic's function calling schema
-    UNSUPPORTED_SCHEMA_FIELDS: set[str] = {
+    UNSUPPORTED_SCHEMA_FIELDS: ClassVar[set[str]] = {
         "title",
         "default",
         "$schema",
