@@ -17,6 +17,7 @@ A robust Python framework for integrating Large Language Models (LLMs) with tool
   - [Installation](#installation)
   - [Basic Usage](#basic-usage)
 - [Multiple MCP Server Usage](#multiple-mcp-server-usage)
+- [API Documentation](#api-documentation)
 - [Architecture](#architecture)
 
 ## Features
@@ -99,6 +100,18 @@ Here are some example queries that demonstrate the power of combining multiple s
    - Brave Search server for research
    - File system server for saving results
 
+## API Documentation
+
+Comprehensive API documentation is available in the [docs/api](docs/api/) directory:
+
+- [API Overview](docs/api/README.md): Complete overview of the API structure and components
+- [Core Components](docs/api/core.md): Detailed documentation of core interfaces and classes
+- [Configuration](docs/api/configuration.md): Configuration options and providers
+- [Tool Integration](docs/api/tool_integration.md): Guide for integrating and implementing tools
+- [Error Handling](docs/api/error_handling.md): Error handling strategies and best practices
+- [Examples](docs/api/examples.md): Practical examples and usage patterns
+
+The API includes three sample LLM backend implementations (OpenAI, Anthropic, and Gemini) that demonstrate how to integrate with different LLM providers. While these implementations have complete code coverage and serve as reference implementations, they are provided as examples only. Users should thoroughly evaluate and test these implementations before using them in production environments.
 
 ## Architecture
 
