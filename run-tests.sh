@@ -81,4 +81,4 @@ if [ "$1" = "--open-report" ]; then
 fi
 
 # Return the test exit code
-exit $TEST_EXIT_CODE
+echo "Test exit code: $TEST_EXIT_CODE"

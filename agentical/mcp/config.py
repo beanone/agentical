@@ -48,7 +48,7 @@ class ConfigurationError(Exception):
     pass
 
 
-class FileBasedMCPConfigProvider:
+class FileBasedMCPConfigProvider(MCPConfigProvider):
     """Loads MCP configuration from a JSON file.
 
     This provider implements the MCPConfigProvider protocol for loading

@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 from agentical.api import LLMBackend
 from agentical.mcp import MCPToolProvider
-from agentical.mcp.config import FileBasedMCPConfigProvider
+from agentical.mcp.config import FileBasedMCPConfigProvider, MCPConfigProvider
 from agentical.utils.log_utils import sanitize_log_message
 
 logger = logging.getLogger(__name__)
@@ -163,8 +163,14 @@ async def interactive_server_selection(provider: MCPToolProvider) -> str | None:
             print("Please enter a valid number.")
 
 
-async def run_demo(llm_backend: LLMBackend):
-    """Main function to test MCPToolProvider functionality."""
+async def run_demo(llm_backend: LLMBackend, config_provider: MCPConfigProvider | None):
+    """Main function to test MCPToolProvider functionality.
+
+    Args:
+        llm_backend: The LLM backend to use
+        config_provider: Optional config provider. If not provided, will create a FileBasedMCPConfigProvider
+            using command line arguments.
+    """
     print("\nStarting run_demo function")
     start_time = time.time()
     logger.info(
@@ -172,30 +178,38 @@ async def run_demo(llm_backend: LLMBackend):
         extra={"llm_backend_type": type(llm_backend).__name__},
     )
 
-    # Parse command line arguments
-    print("Parsing arguments")
-    args = parse_arguments()
-    config_path = args.config
+    if config_provider is None:
+        # Parse command line arguments
+        print("Parsing arguments")
+        args = parse_arguments()
+        config_path = args.config
 
-    # Check if configuration file exists
-    print("Checking config file")
-    if not Path(config_path).exists():
-        logger.error("Configuration file not found", extra={"config_path": config_path})
-        print(f"Error: Configuration file '{config_path}' not found.")
-        print("Please provide a valid configuration file using --config or -c option.")
-        print("Example: python test_mcp_provider.py --config my_config.json")
-        sys.exit(1)
+        # Check if configuration file exists
+        print("Checking config file")
+        if not Path(config_path).exists():
+            logger.error(
+                "Configuration file not found", extra={"config_path": config_path}
+            )
+            print(f"Error: Configuration file '{config_path}' not found.")
+            print(
+                "Please provide a valid configuration file using --config or -c option."
+            )
+            print("Example: python test_mcp_provider.py --config my_config.json")
+            sys.exit(1)
+
+        # Create default config provider if none provided
+        print("Creating config provider")
+        config_provider = FileBasedMCPConfigProvider(config_path)
 
     # Initialize provider with the LLM backend and config
     print("Creating provider")
     logger.debug(
         "Initializing provider",
         extra={
-            "config_path": config_path,
+            "config_provider_type": type(config_provider).__name__,
             "llm_backend_type": type(llm_backend).__name__,
         },
     )
-    config_provider = FileBasedMCPConfigProvider(config_path)
     provider = MCPToolProvider(llm_backend=llm_backend, config_provider=config_provider)
 
     try:

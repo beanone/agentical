@@ -4,10 +4,12 @@ import asyncio
 
 from agentical import chat_client
 from agentical.gemini_backend.gemini_chat import GeminiBackend
+from agentical.mcp.config import FileBasedMCPConfigProvider
 
 
 async def main():
-    await chat_client.run_demo(GeminiBackend())
+    config_provider = FileBasedMCPConfigProvider("config.json")
+    await chat_client.run_demo(GeminiBackend(), config_provider=config_provider)
 
 
 if __name__ == "__main__":
