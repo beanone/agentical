@@ -6,6 +6,7 @@ import pytest
 
 from agentical import chat_client
 from agentical.api import LLMBackend
+from agentical.mcp.config import ConfigurationError, MCPConfigProvider
 
 
 class MockProvider:
@@ -37,6 +38,14 @@ def mock_provider():
 def mock_llm_backend():
     """Fixture providing a mock LLM backend."""
     return Mock(spec=LLMBackend)
+
+
+@pytest.fixture
+def mock_config_provider():
+    """Fixture providing a mock config provider."""
+    provider = Mock(spec=MCPConfigProvider)
+    provider.load_config = AsyncMock(return_value={})
+    return provider
 
 
 @pytest.fixture
@@ -125,7 +134,7 @@ async def test_chat_loop_error_handling(mock_provider):
 
 
 @pytest.mark.asyncio
-async def test_run_demo_single_server(mock_llm_backend, mock_config_file):
+async def test_run_demo_single_server(mock_llm_backend, mock_config_provider):
     """Test running demo with single server selection."""
     # Setup mock provider
     provider = MockProvider()
@@ -144,13 +153,14 @@ async def test_run_demo_single_server(mock_llm_backend, mock_config_file):
 
     # Mock user input for server selection and sys.argv
     with (
-        patch("sys.argv", ["script.py", "--config", mock_config_file]),
         patch("builtins.input", input_mock),
         patch("builtins.print", selective_print),
         patch("agentical.chat_client.MCPToolProvider", return_value=provider),
     ):
         # Run demo
-        await chat_client.run_demo(mock_llm_backend)
+        await chat_client.run_demo(
+            mock_llm_backend, config_provider=mock_config_provider
+        )
 
         # Verify provider interactions
         provider.initialize.assert_called_once()
@@ -159,7 +169,7 @@ async def test_run_demo_single_server(mock_llm_backend, mock_config_file):
 
 
 @pytest.mark.asyncio
-async def test_run_demo_all_servers(mock_llm_backend, mock_config_file):
+async def test_run_demo_all_servers(mock_llm_backend, mock_config_provider):
     """Test running demo with all servers selection."""
     # Setup mock provider
     provider = MockProvider()
@@ -178,13 +188,14 @@ async def test_run_demo_all_servers(mock_llm_backend, mock_config_file):
 
     # Mock user input for server selection and sys.argv
     with (
-        patch("sys.argv", ["script.py", "--config", mock_config_file]),
         patch("builtins.input", input_mock),
         patch("builtins.print", selective_print),
         patch("agentical.chat_client.MCPToolProvider", return_value=provider),
     ):
         # Run demo
-        await chat_client.run_demo(mock_llm_backend)
+        await chat_client.run_demo(
+            mock_llm_backend, config_provider=mock_config_provider
+        )
 
         # Verify provider interactions
         provider.initialize.assert_called_once()
@@ -194,7 +205,7 @@ async def test_run_demo_all_servers(mock_llm_backend, mock_config_file):
 
 @pytest.mark.asyncio
 async def test_run_demo_all_servers_connection_failure(
-    mock_llm_backend, mock_config_file
+    mock_llm_backend, mock_config_provider
 ):
     """Test handling of connection failure when connecting to all servers."""
     # Setup mock provider with connection failure
@@ -215,14 +226,15 @@ async def test_run_demo_all_servers_connection_failure(
 
     # Mock user input for server selection and sys.argv
     with (
-        patch("sys.argv", ["script.py", "--config", mock_config_file]),
         patch("builtins.input", input_mock),
         patch("builtins.print", selective_print),
         patch("agentical.chat_client.MCPToolProvider", return_value=provider),
     ):
         # Run demo and expect exception
         with pytest.raises(Exception, match="Connection failed"):
-            await chat_client.run_demo(mock_llm_backend)
+            await chat_client.run_demo(
+                mock_llm_backend, config_provider=mock_config_provider
+            )
 
         # Verify provider interactions
         provider.initialize.assert_called_once()
@@ -238,8 +250,6 @@ async def test_run_demo_missing_config(mock_llm_backend, tmp_path):
     with (
         patch("sys.argv", ["script.py", "--config", nonexistent_config]),
         patch("builtins.print"),
-        pytest.raises(SystemExit) as exc_info,
+        pytest.raises(SystemExit, match="1"),
     ):
-        await chat_client.run_demo(mock_llm_backend)
-
-    assert exc_info.value.code == 1
+        await chat_client.run_demo(mock_llm_backend, config_provider=None)

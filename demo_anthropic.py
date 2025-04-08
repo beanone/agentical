@@ -6,13 +6,15 @@ from dotenv import load_dotenv
 
 from agentical import chat_client
 from agentical.anthropic_backend.anthropic_chat import AnthropicBackend
+from agentical.mcp.config import FileBasedMCPConfigProvider
 
 # Load environment variables
 load_dotenv()
 
 
 async def main():
-    await chat_client.run_demo(AnthropicBackend())
+    config_provider = FileBasedMCPConfigProvider("config.json")
+    await chat_client.run_demo(AnthropicBackend(), config_provider=config_provider)
 
 
 if __name__ == "__main__":
