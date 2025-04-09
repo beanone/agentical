@@ -222,11 +222,12 @@ graph TD
 
 ### Key Components
 
-- **MCPToolProvider**: MCP interactions ([Provider Architecture](docs/provider_architecture.md) for more detail)
+- **MCPToolProvider**: MCP interactions ([Provider Architecture](docs/provider_architecture.md) and [System Lifecycles](docs/discovery/system-lifecycles.md) for more detail)
   - Load MCP servers from configuration (Discovery based can be implemented later)
-  - Handles server connection
+  - Handles server connection and lifecycle management
   - Manages resource lifecycle with AsyncExitStack
   - Provides clean error handling and validation
+  - Implements comprehensive component lifecycles and state management
 
 - **LLMBackend**: Abstract interface for LLM implementations
   - Type-safe tool integration

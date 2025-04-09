@@ -8,6 +8,7 @@
   - [Health Monitoring](#health-monitoring)
   - [Resource Management](#resource-management)
   - [Logging System](#logging-system)
+- [System Lifecycles](#system-lifecycles)
 - [Implementation Details](#implementation-details)
   - [Connection Service](#connection-service)
   - [Connection Manager](#connection-manager)
@@ -57,6 +58,24 @@ graph TD
     class Provider,Tools focus;
     class Conn,Health active;
 ```
+
+## System Lifecycles
+
+The MCP Tool Provider system implements several key lifecycles that govern component behavior, state transitions, and interactions. For comprehensive details, see [System Lifecycles](discovery/system-lifecycles.md).
+
+Key aspects covered:
+- Component lifecycle states and transitions
+- Inter-component interactions and dependencies
+- Health monitoring and recovery mechanisms
+- Resource management patterns
+- Error handling and recovery flows
+- Logging and monitoring integration
+
+The lifecycle documentation is essential for:
+- Understanding component behaviors and interactions
+- Implementing new features or modifications
+- Debugging system issues
+- Planning system extensions
 
 ## Core Components
 
@@ -339,27 +358,49 @@ The tool registry manages the lifecycle of MCP tools:
 
 ```python
 class ToolRegistry:
-    """Manages the lifecycle of MCP tools."""
+    """Manages the registration and lookup of MCP tools.
+
+    Attributes:
+        tools_by_server (Dict[str, List[MCPTool]]): Tools indexed by server
+        all_tools (List[MCPTool]): Combined list of all available tools
+    """
 
     def __init__(self):
-        self.tools = {}
+        self.tools_by_server: dict[str, list[MCPTool]] = {}
+        self.all_tools: list[MCPTool] = []
 
-    def register_tool(self, tool: MCPTool):
-        self.tools[tool.name] = tool
+    def register_server_tools(self, server_name: str, tools: list[MCPTool]) -> None:
+        """Register tools for a specific server."""
+        if server_name in self.tools_by_server:
+            self.remove_server_tools(server_name)
+        self.tools_by_server[server_name] = tools
+        self.all_tools.extend(tools)
 
-    def get_tool(self, name: str) -> Optional[MCPTool]:
-        return self.tools.get(name)
+    def remove_server_tools(self, server_name: str) -> int:
+        """Remove all tools for a specific server."""
+        num_tools_removed = len(self.tools_by_server.get(server_name, []))
+        if server_name in self.tools_by_server:
+            del self.tools_by_server[server_name]
+            self.all_tools = [
+                tool for name, tools in self.tools_by_server.items()
+                for tool in tools
+            ]
+        return num_tools_removed
 
-    def validate_tool(self, tool: MCPTool) -> bool:
-        # Implementation of tool validation logic
-        return True
+    def find_tool_server(self, tool_name: str) -> str | None:
+        """Find which server hosts a specific tool."""
+        for server_name, tools in self.tools_by_server.items():
+            if any(tool.name == tool_name for tool in tools):
+                return server_name
+        return None
 
-    def get_all_tools(self) -> Dict[str, MCPTool]:
-        return self.tools
-```
+    def get_server_tools(self, server_name: str) -> list[MCPTool]:
+        """Get all tools registered for a specific server."""
+        return self.tools_by_server.get(server_name, [])
 
 Key features:
 - Tool registration and discovery
 - Tool validation and schema management
 - Tool lifecycle management
-- Tool version tracking
+- Server-specific tool collections
+- Combined tool list maintenance

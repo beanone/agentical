@@ -6,6 +6,7 @@
 - [MCPToolProvider](#mcptoolprovider)
   - [Key Features](#mcptoolprovider-key-features)
   - [Implementation Notes](#mcptoolprovider-implementation-notes)
+  - [Lifecycle Management](#lifecycle-management)
 - [ChatClient](#chatclient)
   - [Key Features](#chatclient-key-features)
   - [Usage Examples](#chatclient-usage-examples)
@@ -77,7 +78,7 @@ class LLMBackend(ABC, Generic[Context]):
 
 ## MCPToolProvider
 
-The main facade for integrating LLMs with MCP tools.
+The main facade for integrating LLMs with MCP tools. For detailed information about component lifecycles, state transitions, and interactions, see [System Lifecycles](../discovery/system-lifecycles.md).
 
 ```python
 from agentical.api import LLMBackend
@@ -88,82 +89,51 @@ class MCPToolProvider:
     def __init__(
         self,
         llm_backend: LLMBackend,
-        config_provider: MCPConfigProvider | None = None,
-        server_configs: dict[str, ServerConfig] | None = None,
+        config_provider: Optional[MCPConfigProvider] = None,
+        server_configs: Optional[Dict[str, ServerConfig]] = None
     ):
-        """Initialize the MCP Tool Provider.
-
-        Args:
-            llm_backend: The LLM backend implementation
-            config_provider: Optional configuration provider
-            server_configs: Optional direct server configurations
-        """
-        pass
-
-    async def initialize(self) -> None:
-        """Initialize the provider with configurations."""
-        pass
-
-    def list_available_servers(self) -> list[str]:
-        """List all available MCP servers.
-
-        Returns:
-            List of server names
-        """
-        pass
-
-    async def mcp_connect(self, server_name: str) -> None:
-        """Connect to a specific MCP server.
-
-        Args:
-            server_name: Name of the server to connect to
-        """
-        pass
-
-    async def process_query(self, query: str) -> str:
-        """Process a user query.
-
-        Args:
-            query: The user's input query
-
-        Returns:
-            The response from the LLM
-        """
-        pass
-
-    async def cleanup(self, server_name: str | None = None) -> None:
-        """Clean up resources for a specific server or all servers.
-
-        Args:
-            server_name: Optional server name to clean up
-        """
+        """Initialize the MCP Tool Provider."""
         pass
 ```
 
-### MCPToolProvider Key Features
-
+### Key Features
 - Server connection management
 - Tool discovery and registration
 - Query processing with LLM integration
 - Resource cleanup and management
-- Health monitoring
 
-### MCPToolProvider Implementation Notes
+### Implementation Notes
+- Uses connection manager for robust server connections
+- Implements health monitoring with automatic recovery
+- Maintains tool registry for efficient dispatch
+- Provides comprehensive error handling
+- Ensures proper resource cleanup
 
-1. **Connection Management**
-   - Automatic reconnection on failures
-   - Health monitoring with heartbeats
-   - Proper resource cleanup
+### Lifecycle Management
+The MCPToolProvider implements several key lifecycles:
 
-2. **Tool Registry**
-   - Efficient tool lookup and dispatch
-   - Server-specific tool namespacing
-   - Tool validation and conversion
+1. [Provider Lifecycle](../discovery/system-lifecycles.md#2-provider-lifecycle)
+   - Initialization and configuration
+   - Connection management
+   - Operation handling
+   - Resource cleanup
 
-3. **Resource Management**
-   - Uses AsyncExitStack for cleanup
-   - Proper handling of server sessions
-   - Guaranteed resource cleanup
+2. [Connection Management](../discovery/system-lifecycles.md#3-connection-lifecycle)
+   - Connection establishment
+   - Health monitoring
+   - Automatic recovery
+   - Resource cleanup
+
+3. [Tool Management](../discovery/system-lifecycles.md#4-tool-lifecycle)
+   - Tool discovery
+   - Registration
+   - Execution
+   - Cleanup
+
+4. [Error Handling](../discovery/system-lifecycles.md#7-error-handling-and-recovery)
+   - Error detection
+   - Recovery mechanisms
+   - Resource protection
 
 ## ChatClient
 
