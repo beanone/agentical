@@ -1,5 +1,15 @@
 # Core API Components
 
+## Table of Contents
+- [LLMBackend](#llmbackend)
+  - [Implementation Notes](#llmbackend-implementation-notes)
+- [MCPToolProvider](#mcptoolprovider)
+  - [Key Features](#mcptoolprovider-key-features)
+  - [Implementation Notes](#mcptoolprovider-implementation-notes)
+- [ChatClient](#chatclient)
+  - [Key Features](#chatclient-key-features)
+  - [Usage Examples](#chatclient-usage-examples)
+
 This document covers the core components of the Agentical API.
 
 ## LLMBackend
@@ -48,7 +58,7 @@ class LLMBackend(ABC, Generic[Context]):
         pass
 ```
 
-### Implementation Notes
+### LLMBackend Implementation Notes
 
 1. **Context Management**
    - Use the `Context` type parameter for your specific context type
@@ -130,7 +140,7 @@ class MCPToolProvider:
         pass
 ```
 
-### Key Features
+### MCPToolProvider Key Features
 
 - Server connection management
 - Tool discovery and registration
@@ -138,7 +148,7 @@ class MCPToolProvider:
 - Resource cleanup and management
 - Health monitoring
 
-### Implementation Notes
+### MCPToolProvider Implementation Notes
 
 1. **Connection Management**
    - Automatic reconnection on failures
@@ -162,49 +172,235 @@ Interactive chat client for the MCP Tool Provider.
 ```python
 from agentical.api import LLMBackend
 from agentical.mcp import MCPToolProvider
+from agentical.mcp.config import FileBasedMCPConfigProvider, MCPConfigProvider
+import logging
+import time
 
-async def run_demo(llm_backend: LLMBackend):
-    """Run an interactive demo session.
+logger = logging.getLogger(__name__)
+
+async def run_demo(llm_backend: LLMBackend, config_provider: MCPConfigProvider | None = None):
+    """Run an interactive demo session with comprehensive logging and error handling.
 
     Args:
         llm_backend: The LLM backend to use
+        config_provider: Optional configuration provider. If not provided,
+            will use command line arguments to create a FileBasedMCPConfigProvider.
+
+    Example:
+        ```python
+        from agentical.api import LLMBackend
+        from agentical.mcp.config import FileBasedMCPConfigProvider
+
+        # Initialize LLM backend
+        llm_backend = YourLLMBackend()
+
+        # Option 1: Use default config file
+        await run_demo(llm_backend)
+
+        # Option 2: Use custom config provider
+        config_provider = FileBasedMCPConfigProvider("custom_config.json")
+        await run_demo(llm_backend, config_provider)
+        ```
     """
-    pass
+    # Initialize provider
+    provider = MCPToolProvider(llm_backend=llm_backend, config_provider=config_provider)
+    await provider.initialize()
+
+    # Select and connect to server(s)
+    selected_server = await interactive_server_selection(provider)
+    if selected_server:
+        await provider.mcp_connect(selected_server)
+    else:
+        await provider.mcp_connect_all()
+
+    # Start chat session
+    await chat_loop(provider)
 
 async def chat_loop(provider: MCPToolProvider):
-    """Run an interactive chat session.
+    """Run an interactive chat session with comprehensive logging and statistics.
 
     Args:
         provider: The configured MCP Tool Provider
+
+    Example:
+        ```python
+        # Basic usage
+        await chat_loop(provider)
+
+        # With custom logging
+        logger = logging.getLogger(__name__)
+        logger.setLevel(logging.DEBUG)
+        await chat_loop(provider)
+        ```
+
+    The chat loop provides:
+    - Query timing information
+    - Error tracking and reporting
+    - Session statistics
+    - Clean exit handling
     """
-    pass
+    start_time = time.time()
+    query_count = 0
+    error_count = 0
+
+    try:
+        while True:
+            query = input("\nQuery: ").strip()
+            if query.lower() == "quit":
+                break
+
+            query_count += 1
+            query_start = time.time()
+            try:
+                response = await provider.process_query(query)
+                query_duration = time.time() - query_start
+                logger.debug(
+                    "Query processed",
+                    extra={
+                        "query_number": query_count,
+                        "duration_ms": int(query_duration * 1000),
+                    },
+                )
+                print("\n" + response)
+            except Exception as e:
+                error_count += 1
+                query_duration = time.time() - query_start
+                logger.error(
+                    "Query processing error",
+                    extra={
+                        "query_number": query_count,
+                        "error": str(e),
+                        "duration_ms": int(query_duration * 1000),
+                    },
+                    exc_info=True,
+                )
+                print(f"\nError processing query: {e!s}")
+    finally:
+        session_duration = time.time() - start_time
+        logger.info(
+            "Chat session ended",
+            extra={
+                "total_queries": query_count,
+                "successful_queries": query_count - error_count,
+                "failed_queries": error_count,
+                "duration_ms": int(session_duration * 1000),
+            },
+        )
 
 async def interactive_server_selection(provider: MCPToolProvider) -> str | None:
-    """Prompt user to select an MCP server.
+    """Interactively prompt the user to select an MCP server with validation and logging.
 
     Args:
         provider: The MCP Tool Provider
 
     Returns:
         Selected server name or None for all servers
+
+    Example:
+        ```python
+        # Basic usage
+        server = await interactive_server_selection(provider)
+
+        # With custom logging
+        logger = logging.getLogger(__name__)
+        logger.setLevel(logging.DEBUG)
+        server = await interactive_server_selection(provider)
+        ```
+
+    The selection process includes:
+    - Server availability validation
+    - Input validation and error handling
+    - Comprehensive logging
+    - Option to select all servers
     """
-    pass
+    servers = provider.list_available_servers()
+    if not servers:
+        raise ValueError("No MCP servers available in configuration")
+
+    print("\nAvailable MCP servers:")
+    for idx, server in enumerate(servers, 1):
+        print(f"{idx}. {server}")
+    print(f"{len(servers) + 1}. All above servers")
+
+    while True:
+        try:
+            choice = input("\nSelect a server (enter number): ").strip()
+            idx = int(choice) - 1
+
+            if idx == len(servers):
+                return None
+            if 0 <= idx < len(servers):
+                return servers[idx]
+
+            print("Invalid selection. Please try again.")
+        except ValueError:
+            print("Please enter a valid number.")
 ```
 
-### Key Features
+### ChatClient Key Features
 
 1. **Interactive Mode**
    - User-friendly command-line interface
-   - Server selection prompts
-   - Query/response loop
+   - Server selection with validation
+   - Query/response loop with statistics
    - Clean exit handling
 
 2. **Error Handling**
-   - Query processing error capture
-   - User input validation
-   - Session statistics tracking
+   - Comprehensive error tracking
+   - Query timing and performance metrics
+   - Session statistics
+   - Detailed logging
 
-3. **Logging**
-   - Comprehensive session logging
-   - Query timing information
+3. **Logging and Monitoring**
+   - Query processing timing
    - Error tracking and reporting
+   - Session statistics
+   - Performance metrics
+
+4. **Configuration**
+   - Flexible configuration options
+   - Command-line argument support
+   - Custom config provider support
+   - Environment variable integration
+
+### ChatClient Usage Examples
+
+1. **Basic Usage**
+```python
+from agentical.api import LLMBackend
+from agentical.mcp.config import FileBasedMCPConfigProvider
+
+# Initialize components
+llm_backend = YourLLMBackend()
+config_provider = FileBasedMCPConfigProvider("config.json")
+
+# Run demo
+await run_demo(llm_backend, config_provider)
+```
+
+2. **Custom Configuration**
+```python
+from agentical.api import LLMBackend
+from agentical.mcp.config import MCPConfigProvider
+
+class CustomConfigProvider(MCPConfigProvider):
+    def get_server_configs(self) -> dict[str, ServerConfig]:
+        # Custom configuration logic
+        return {...}
+
+# Use custom config provider
+config_provider = CustomConfigProvider()
+await run_demo(llm_backend, config_provider)
+```
+
+3. **Advanced Usage with Logging**
+```python
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+# Run with detailed logging
+await run_demo(llm_backend, config_provider)
+```
