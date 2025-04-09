@@ -1,5 +1,15 @@
 # Examples
 
+> **⚠️ Important Note About Examples**
+>
+> The code examples in this document are generated using LLMs to illustrate usage patterns. While they follow best practices, they may not be fully tested or production-ready. For verified, working examples:
+>
+> - Check the unit tests in the `tests/` directory
+> - Review the actual server implementations in `server/` (e.g., `weather_server.py`, `calculator_server.py`)
+> - Examine the integration tests for real-world usage patterns
+>
+> These real code samples are thoroughly tested and maintained.
+
 ## Table of Contents
 - [Overview](#overview)
 - [Basic Usage](#basic-usage)
