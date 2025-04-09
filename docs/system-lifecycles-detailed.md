@@ -1,4 +1,4 @@
-# System Lifecycles
+# System Lifecycles Detailed
 
 This document details the various lifecycles present in the Agentical system, their interactions, and management.
 
