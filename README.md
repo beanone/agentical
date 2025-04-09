@@ -19,6 +19,13 @@ A robust Python framework for integrating Large Language Models (LLMs) with tool
 - [Multiple MCP Server Usage](#multiple-mcp-server-usage)
 - [API Documentation](#api-documentation)
 - [Architecture](#architecture)
+- [Environment Variables](#environment-variables)
+- [Logging System](#logging-system)
+- [Troubleshooting](#troubleshooting)
+- [Development](#development)
+- [Contributing](#contributing)
+- [License](#license)
+- [Acknowledgments](#acknowledgments)
 
 ## Features
 
@@ -248,7 +255,7 @@ Each server in the configuration must implement the Model Context Protocol. The 
 - `env`: Optional environment variables for the server
 - `working_dir`: Optional working directory for the server
 
-### Environment Variables
+## Environment Variables
 
 Set in a `.env` file:
 
@@ -280,6 +287,45 @@ Each LLM backend has its own environment variables for API keys and model select
 
 3. **server-specific variables**
    - such as OPENWEATHERMAP_API_KEY if you use a weather server.
+
+## Logging System
+
+The framework includes a comprehensive logging system with:
+- Structured logging with timestamps and log levels
+- Optional rotating log files
+- Log message sanitization
+- Configurable log levels
+
+For detailed configuration, see [Logging Configuration](docs/api/error_handling.md#logging-strategy).
+
+## Troubleshooting
+
+Common issues and solutions:
+
+1. **API Key Configuration**
+   - Ensure environment variables are set correctly in `.env`
+   - Check `.env` file format and permissions
+   - Verify API keys are valid and have sufficient permissions
+
+2. **Server Connection**
+   - Verify server configurations in `config.json`
+   - Check network connectivity to MCP servers
+   - Ensure required ports are available
+   - Check server logs for connection errors
+
+3. **Tool Execution**
+   - Verify tool permissions and access rights
+   - Check resource availability (memory, disk space)
+   - Review tool-specific error messages
+   - Check server health status
+
+4. **Configuration Issues**
+   - Validate `config.json` against `config_template.json`
+   - Check for missing or invalid configuration values
+   - Verify environment variables are properly set
+   - Ensure working directories exist and are accessible
+
+For more detailed troubleshooting, see the [Error Handling](docs/api/error_handling.md) documentation.
 
 ## Development
 
