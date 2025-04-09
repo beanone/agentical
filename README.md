@@ -142,6 +142,8 @@ The framework follows a clean, layered architecture:
 
 For detailed information about specific components:
 
+- [Provider Architecture](docs/provider_architecture.md): Detailed overview of the provider implementation
+- [System Lifecycles](docs/system-lifecycles.md): Comprehensive documentation of system state transitions and lifecycles
 
 Here is  a more detailed view of the system architecture and component relationships:
 
@@ -222,7 +224,7 @@ graph TD
 
 ### Key Components
 
-- **MCPToolProvider**: MCP interactions ([Provider Architecture](docs/provider_architecture.md) and [System Lifecycles](docs/discovery/system-lifecycles.md) for more detail)
+- **MCPToolProvider**: MCP interactions ([Provider Architecture](docs/provider_architecture.md) and [System Lifecycles](docs/system-lifecycles.md) for more detail)
   - Load MCP servers from configuration (Discovery based can be implemented later)
   - Handles server connection and lifecycle management
   - Manages resource lifecycle with AsyncExitStack

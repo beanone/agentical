@@ -61,7 +61,7 @@ graph TD
 
 ## System Lifecycles
 
-The MCP Tool Provider system implements several key lifecycles that govern component behavior, state transitions, and interactions. For comprehensive details, see [System Lifecycles](discovery/system-lifecycles.md).
+The MCP Tool Provider system implements several key lifecycles that govern component behavior, state transitions, and interactions. For comprehensive details, see [System Lifecycles](system-lifecycles.md).
 
 Key aspects covered:
 - Component lifecycle states and transitions
