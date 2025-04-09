@@ -6,7 +6,7 @@ import pytest
 
 from agentical import chat_client
 from agentical.api import LLMBackend
-from agentical.mcp.config import ConfigurationError, MCPConfigProvider
+from agentical.mcp.config import MCPConfigProvider
 
 
 class MockProvider:
