@@ -116,11 +116,6 @@ graph TD
     class RML,HML,EHL foundation;
     class LML observability;
 
-    %% Style subgraphs
-    style Core_Layer fill:#2d2d2d,stroke:#666,color:#fff;
-    style Service_Layer fill:#2d2d2d,stroke:#666,color:#fff;
-    style Foundation_Layer fill:#2d2d2d,stroke:#666,color:#fff;
-    style Observability_Layer fill:#2d2d2d,stroke:#666,color:#fff;
 ```
 
 Key relationships:
