@@ -1,5 +1,18 @@
 # Provider Architecture
 
+## Table of Contents
+- [Overview](#overview)
+- [Core Components](#core-components)
+  - [MCPToolProvider](#mcptoolprovider)
+  - [Connection Management](#connection-management)
+  - [Health Monitoring](#health-monitoring)
+  - [Resource Management](#resource-management)
+  - [Logging System](#logging-system)
+- [Implementation Details](#implementation-details)
+  - [Connection Service](#connection-service)
+  - [Connection Manager](#connection-manager)
+  - [Tool Registry](#tool-registry)
+
 ## Overview
 
 The MCP (Machine Control Protocol) Tool Provider system in Agentical is designed to integrate LLM backends with external tools through a robust, fault-tolerant connection management system. The architecture follows a layered approach with clear separation of concerns.
@@ -45,135 +58,18 @@ graph TD
     class Conn,Health active;
 ```
 
-## Connection Management
-
-The connection system manages server connections, health monitoring, and resource lifecycle:
-
-```mermaid
-graph LR
-    subgraph "Connection Management"
-        direction TB
-        Provider[MCP Provider]
-        
-        subgraph "Connection Service"
-            Connect[Connect]
-            Monitor[Monitor]
-            Cleanup[Cleanup]
-        end
-        
-        subgraph "Connection Manager"
-            Retry[Retry Logic]
-            Resources[Resource Mgmt]
-            State[State Tracking]
-        end
-        
-        Provider --> Connect
-        Connect --> Retry
-        Monitor --> State
-        Cleanup --> Resources
-    end
-
-    classDef default fill:#1a1a1a,stroke:#333,stroke-width:2px,color:#fff;
-    classDef focus fill:#1b5e20,stroke:#1b5e20,stroke-width:2px,color:#fff;
-    classDef active fill:#e65100,stroke:#e65100,stroke-width:2px,color:#fff;
-
-    class Provider default;
-    class Connect,Monitor,Cleanup focus;
-    class Retry,Resources,State active;
-```
-
-## Health Monitoring
-
-The health monitoring system ensures reliable server connections through regular heartbeat checks and automatic recovery:
-
-```mermaid
-stateDiagram-v2
-    direction LR
-    
-    [*] --> Healthy: Initialize
-    Healthy --> Unhealthy: Miss Heartbeat
-    Unhealthy --> Reconnecting: Max Misses (2)
-    Reconnecting --> Healthy: Success
-    Reconnecting --> Failed: Max Retries (3)
-    Failed --> [*]: Cleanup
-    
-    note right of Healthy
-        Heartbeat Check
-        Every 30 seconds
-        (HEARTBEAT_INTERVAL)
-    end note
-    
-    note right of Unhealthy
-        Missed heartbeat
-        Retries: 0/2
-        (MAX_HEARTBEAT_MISS)
-    end note
-    
-    note right of Reconnecting
-        Exponential backoff
-        Base delay: 1.0s
-        (BASE_DELAY)
-    end note
-```
-
-Features:
-- Regular heartbeat checks (every 30 seconds)
-- Configurable miss tolerance (default: 2)
-- Automatic reconnection with exponential backoff
-- Maximum retry attempts (default: 3)
-- Proper cleanup on failure
-
-## Resource Management
-
-```mermaid
-graph TD
-    subgraph Resources["Resource Management"]
-        Stack[AsyncExitStack]
-        Sessions[Active Sessions]
-        Transports[IO Transports]
-        
-        Stack --> |Manages|Sessions
-        Stack --> |Manages|Transports
-        
-        subgraph Cleanup["Cleanup Handlers"]
-            Server[Server Cleanup]
-            Connection[Connection Cleanup]
-            Transport[Transport Cleanup]
-        end
-        
-        Sessions --> Server
-        Transports --> Transport
-        Stack --> Connection
-    end
-    
-    classDef default fill:#1a1a1a,stroke:#333,stroke-width:2px,color:#fff;
-    classDef focus fill:#4a148c,stroke:#4a148c,stroke-width:2px,color:#fff;
-    classDef active fill:#1b5e20,stroke:#1b5e20,stroke-width:2px,color:#fff;
-
-    class Sessions,Transports,Server,Connection,Transport default;
-    class Stack focus;
-    class Cleanup active;
-```
-
-Key features:
-- Proper async resource management
-- Ordered cleanup
-- Connection state tracking
-- Transport management
-- Session lifecycle management
-
 ## Core Components
 
-### 1. MCPToolProvider
+### MCPToolProvider
 
 The main facade that integrates LLMs with MCP tools. Key responsibilities:
 
 ```python
 class MCPToolProvider:
     """Main facade for integrating LLMs with MCP tools."""
-    
+
     def __init__(
-        self, 
+        self,
         llm_backend: LLMBackend,
         config_provider: Optional[MCPConfigProvider] = None,
         server_configs: Optional[Dict[str, ServerConfig]] = None
@@ -190,7 +86,223 @@ Key features:
 - Query processing with LLM integration
 - Resource cleanup and management
 
-### 2. Connection Management
+### Connection Management
+
+The connection system manages server connections, health monitoring, and resource lifecycle:
+
+```mermaid
+graph LR
+    subgraph "Connection Management"
+        direction TB
+        Provider[MCP Provider]
+
+        subgraph "Connection Service"
+            Connect[Connect]
+            Monitor[Monitor]
+            Cleanup[Cleanup]
+        end
+
+        subgraph "Connection Manager"
+            Retry[Retry Logic]
+            Resources[Resource Mgmt]
+            State[State Tracking]
+        end
+
+        Provider --> Connect
+        Connect --> Retry
+        Monitor --> State
+        Cleanup --> Resources
+    end
+
+    classDef default fill:#1a1a1a,stroke:#333,stroke-width:2px,color:#fff;
+    classDef focus fill:#1b5e20,stroke:#1b5e20,stroke-width:2px,color:#fff;
+    classDef active fill:#e65100,stroke:#e65100,stroke-width:2px,color:#fff;
+
+    class Provider default;
+    class Connect,Monitor,Cleanup focus;
+    class Retry,Resources,State active;
+```
+
+### Health Monitoring
+
+The health monitoring system ensures reliable server connections through regular heartbeat checks and automatic recovery:
+
+```mermaid
+stateDiagram-v2
+    direction LR
+
+    [*] --> Healthy: Initialize
+    Healthy --> Unhealthy: Miss Heartbeat
+    Unhealthy --> Reconnecting: Max Misses (2)
+    Reconnecting --> Healthy: Success
+    Reconnecting --> Failed: Max Retries (3)
+    Failed --> [*]: Cleanup
+
+    note right of Healthy
+        Heartbeat Check
+        Every 30 seconds
+        (HEARTBEAT_INTERVAL)
+    end note
+
+    note right of Unhealthy
+        Missed heartbeat
+        Retries: 0/2
+        (MAX_HEARTBEAT_MISS)
+    end note
+
+    note right of Reconnecting
+        Exponential backoff
+        Base delay: 1.0s
+        (BASE_DELAY)
+    end note
+```
+
+Features:
+- Regular heartbeat checks (every 30 seconds)
+- Configurable miss tolerance (default: 2)
+- Automatic reconnection with exponential backoff
+- Maximum retry attempts (default: 3)
+- Proper cleanup on failure
+
+### Resource Management
+
+```mermaid
+graph TD
+    subgraph Resources["Resource Management"]
+        Stack[AsyncExitStack]
+        Sessions[Active Sessions]
+        Transports[IO Transports]
+
+        Stack --> |Manages|Sessions
+        Stack --> |Manages|Transports
+
+        subgraph Cleanup["Cleanup Handlers"]
+            Server[Server Cleanup]
+            Connection[Connection Cleanup]
+            Transport[Transport Cleanup]
+        end
+
+        Sessions --> Server
+        Transports --> Transport
+        Stack --> Connection
+    end
+
+    classDef default fill:#1a1a1a,stroke:#333,stroke-width:2px,color:#fff;
+    classDef focus fill:#4a148c,stroke:#4a148c,stroke-width:2px,color:#fff;
+    classDef active fill:#1b5e20,stroke:#1b5e20,stroke-width:2px,color:#fff;
+
+    class Sessions,Transports,Server,Connection,Transport default;
+    class Stack focus;
+    class Cleanup active;
+```
+
+Key features:
+- Proper async resource management
+- Ordered cleanup
+- Connection state tracking
+- Transport management
+- Session lifecycle management
+
+### Logging System
+
+The logging system provides comprehensive observability across the MCP Tool Provider:
+
+```mermaid
+graph TD
+    subgraph Logging["Logging System"]
+        Config[Logging Config]
+        Handler[Log Handlers]
+        Formatter[Log Formatters]
+        Filter[Log Filters]
+
+        Config --> Handler
+        Handler --> Formatter
+        Formatter --> Filter
+
+        subgraph Output["Output Destinations"]
+            File[File Handler]
+            Console[Console Handler]
+            Rotating[Rotating File Handler]
+        end
+
+        Handler --> File
+        Handler --> Console
+        Handler --> Rotating
+    end
+
+    classDef default fill:#1a1a1a,stroke:#333,stroke-width:2px,color:#fff;
+    classDef focus fill:#4a148c,stroke:#4a148c,stroke-width:2px,color:#fff;
+    classDef active fill:#1b5e20,stroke:#1b5e20,stroke-width:2px,color:#fff;
+
+    class Config,Handler,Formatter,Filter default;
+    class File,Console,Rotating focus;
+    class Output active;
+```
+
+Key features:
+- Structured logging with timestamps and log levels
+- Configurable log rotation
+- Multiple output destinations (file, console)
+- Log message sanitization
+- Contextual logging with correlation IDs
+
+Implementation details:
+```python
+def setup_logging(level: int | None = None, log_dir: str | None = None):
+    """Configure logging for the MCP Tool Provider."""
+
+    # Set up basic configuration
+    logging.basicConfig(
+        level=level or logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+
+    # Add file handler if log directory specified
+    if log_dir:
+        file_handler = RotatingFileHandler(
+            filename=os.path.join(log_dir, 'mcp.log'),
+            maxBytes=10*1024*1024,  # 10MB
+            backupCount=5
+        )
+        logging.getLogger().addHandler(file_handler)
+```
+
+Logging levels:
+- DEBUG: Detailed information for debugging
+- INFO: General operational information
+- WARNING: Warning conditions
+- ERROR: Error conditions
+- CRITICAL: Critical conditions
+
+## Implementation Details
+
+### Connection Service
+
+Provides high-level connection management with:
+- Health monitoring
+- Automatic reconnection
+- Resource cleanup
+- Session management
+
+```python
+class MCPConnectionService(ServerReconnector, ServerCleanupHandler):
+    """Unified service for managing MCP server connections and health."""
+
+    HEARTBEAT_INTERVAL = 30  # seconds
+    MAX_HEARTBEAT_MISS = 2   # attempts before reconnection
+```
+
+Key responsibilities:
+- Maintains server health status
+- Schedules regular heartbeat checks
+- Triggers reconnection on failures
+- Manages cleanup on permanent failures
+
+### Connection Manager
+
+Handles low-level connection details:
+- Connection establishment with retry
+- Resource management
 
 ```mermaid
 sequenceDiagram
@@ -200,7 +312,7 @@ sequenceDiagram
     participant Manager as ConnectionManager
     participant Health as HealthMonitor
     participant Server as MCP Server
-    
+
     App->>Provider: mcp_connect(server_name)
     activate Provider
     Provider->>Service: connect(server_name, config)
@@ -221,143 +333,33 @@ sequenceDiagram
     deactivate Provider
 ```
 
-#### Connection Service (`MCPConnectionService`)
+### Tool Registry
 
-Provides high-level connection management with:
-- Health monitoring
-- Automatic reconnection
-- Resource cleanup
-- Session management
+The tool registry manages the lifecycle of MCP tools:
 
 ```python
-class MCPConnectionService(ServerReconnector, ServerCleanupHandler):
-    """Unified service for managing MCP server connections and health."""
-    
-    HEARTBEAT_INTERVAL = 30  # seconds
-    MAX_HEARTBEAT_MISS = 2   # attempts before reconnection
-```
+class ToolRegistry:
+    """Manages the lifecycle of MCP tools."""
 
-Key responsibilities:
-- Maintains server health status
-- Schedules regular heartbeat checks
-- Triggers reconnection on failures
-- Manages cleanup on permanent failures
+    def __init__(self):
+        self.tools = {}
 
-#### Connection Manager (`MCPConnectionManager`)
+    def register_tool(self, tool: MCPTool):
+        self.tools[tool.name] = tool
 
-Handles low-level connection details:
-- Connection establishment with retry
-- Resource management
-- Connection state tracking
-- Error handling
+    def get_tool(self, name: str) -> Optional[MCPTool]:
+        return self.tools.get(name)
 
-```python
-class MCPConnectionManager:
-    """Manages connections to MCP servers."""
-    
-    MAX_RETRIES = 3
-    BASE_DELAY = 1.0
-```
+    def validate_tool(self, tool: MCPTool) -> bool:
+        # Implementation of tool validation logic
+        return True
 
-### 3. Health Monitoring
-
-The health monitoring system is implemented in the `MCPConnectionService` class:
-
-```python
-class MCPConnectionService(ServerReconnector, ServerCleanupHandler):
-    """Unified service for managing MCP server connections and health."""
-    
-    HEARTBEAT_INTERVAL = 30  # seconds
-    MAX_HEARTBEAT_MISS = 2   # attempts before reconnection
-```
-
-Key responsibilities:
-- Maintains server health status
-- Schedules regular heartbeat checks
-- Triggers reconnection on failures
-- Manages cleanup on permanent failures
-
-### 4. Tool Registry
-
-Manages tool discovery and registration:
-- Tool metadata storage
-- Server-tool mapping
-- Tool validation
-- Access control
-
-## Error Handling and Recovery
-
-```mermaid
-flowchart TD
-    subgraph ErrorHandling["Error Handling System"]
-        Detection[Error Detection]
-        Classification[Error Classification]
-        Recovery[Recovery Strategy]
-        
-        Detection --> Classification
-        Classification --> Recovery
-        
-        subgraph Strategies["Recovery Strategies"]
-            Retry[Retry with Backoff]
-            Reconnect[Reconnection]
-            Cleanup[Resource Cleanup]
-            
-            Recovery --> Retry
-            Recovery --> Reconnect
-            Recovery --> Cleanup
-        end
-    end
-    
-    classDef default fill:#1a1a1a,stroke:#333,stroke-width:2px,color:#fff;
-    classDef focus fill:#4a148c,stroke:#4a148c,stroke-width:2px,color:#fff;
-    classDef active fill:#1b5e20,stroke:#1b5e20,stroke-width:2px,color:#fff;
-
-    class Detection,Classification,Recovery focus;
-    class Retry,Reconnect,Cleanup active;
-```
-
-Features:
-- Exponential backoff retry
-- Automatic reconnection
-- Resource cleanup
-- Error categorization
-- Comprehensive logging
-
-## Resource Management
-
-```mermaid
-graph TD
-    subgraph Resources["Resource Management"]
-        Stack[AsyncExitStack]
-        Sessions[Active Sessions]
-        Transports[IO Transports]
-        
-        Stack --> |Manages|Sessions
-        Stack --> |Manages|Transports
-        
-        subgraph Cleanup["Cleanup Handlers"]
-            Server[Server Cleanup]
-            Connection[Connection Cleanup]
-            Transport[Transport Cleanup]
-        end
-        
-        Sessions --> Server
-        Transports --> Transport
-        Stack --> Connection
-    end
-    
-    classDef default fill:#1a1a1a,stroke:#333,stroke-width:2px,color:#fff;
-    classDef focus fill:#4a148c,stroke:#4a148c,stroke-width:2px,color:#fff;
-    classDef active fill:#1b5e20,stroke:#1b5e20,stroke-width:2px,color:#fff;
-
-    class Sessions,Transports,Server,Connection,Transport default;
-    class Stack focus;
-    class Cleanup active;
+    def get_all_tools(self) -> Dict[str, MCPTool]:
+        return self.tools
 ```
 
 Key features:
-- Proper async resource management
-- Ordered cleanup
-- Connection state tracking
-- Transport management
-- Session lifecycle management 
+- Tool registration and discovery
+- Tool validation and schema management
+- Tool lifecycle management
+- Tool version tracking
