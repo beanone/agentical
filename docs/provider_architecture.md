@@ -397,6 +397,7 @@ class ToolRegistry:
     def get_server_tools(self, server_name: str) -> list[MCPTool]:
         """Get all tools registered for a specific server."""
         return self.tools_by_server.get(server_name, [])
+```
 
 Key features:
 - Tool registration and discovery
