@@ -47,108 +47,153 @@ This document details the various lifecycles present in the Agentical system, th
 
 ### 1.1 Lifecycle Relationships
 
-The following diagram illustrates how different lifecycles in the system interact with each other:
+The system consists of several interconnected lifecycles that work together to provide robust and reliable operation. These relationships can be understood through four key perspectives:
+
+#### 1.1.1 Core Component Dependencies
+
+The fundamental relationships between core system components:
 
 ```mermaid
 graph TD
-    subgraph "System Lifecycles"
-        subgraph "Core Layer"
-            PL[Provider Lifecycle]
-        end
+    %% Core Components
+    PL[Provider Lifecycle]
+    CL[Connection Lifecycle]
+    TL[Tool Lifecycle]
+    SL[Session Lifecycle]
 
-        subgraph "Service Layer"
-            CL[Connection Lifecycle]
-            TL[Tool Lifecycle]
-            SL[Session Lifecycle]
-        end
+    %% Core Dependencies
+    PL -->|initializes| CL
+    PL -->|manages| TL
+    CL -->|creates| SL
+    TL -->|executed in| SL
 
-        subgraph "Foundation Layer"
-            RML[Resource Management]
-            HML[Health Monitoring]
-            EHL[Error Handling]
-        end
+    %% Styling
+    classDef core fill:#7b1fa2,stroke:#9c27b0,stroke-width:3px,color:#fff,font-weight:bold;
+    classDef service fill:#2e7d32,stroke:#4caf50,stroke-width:2px,color:#fff;
 
-        subgraph "Observability Layer"
-            LML[Logging & Monitoring]
-        end
+    class PL core;
+    class CL,TL,SL service;
+```
 
-        %% Core to Service relationships
-        PL --> CL
-        PL --> TL
-        PL --> SL
-        PL --> RML
+Key relationships:
+- Provider Lifecycle is the central coordinator
+- Connection Lifecycle manages server connections
+- Tool Lifecycle handles tool registration and execution
+- Session Lifecycle controls active sessions
 
-        %% Service layer relationships
-        CL <--> HML
-        TL <--> SL
+#### 1.1.2 Health and Resource Management
 
-        %% Error handling relationships
-        EHL --> CL
-        EHL --> TL
-        EHL --> SL
-        EHL --> RML
+The health monitoring and resource management relationships:
 
-        %% Resource management relationships
-        RML --> CL
-        RML --> TL
-        RML --> SL
+```mermaid
+graph TD
+    %% Components
+    HML[Health Monitoring]
+    RML[Resource Management]
+    CL[Connection Lifecycle]
+    SL[Session Lifecycle]
+    TL[Tool Lifecycle]
 
-        %% Logging relationships
-        LML -.-> PL
-        LML -.-> CL
-        LML -.-> TL
-        LML -.-> SL
-        LML -.-> HML
-        LML -.-> EHL
-        LML -.-> RML
-    end
+    %% Health Dependencies
+    HML -->|monitors| CL
+    HML -->|monitors| SL
+    HML -->|triggers recovery| CL
 
-    %% Style definitions with improved readability
-    classDef default fill:#2d2d2d,stroke:#666,stroke-width:2px,color:#ddd;
+    %% Resource Dependencies
+    RML -->|manages| CL
+    RML -->|manages| SL
+    RML -->|manages| TL
+
+    %% Styling
+    classDef foundation fill:#f57c00,stroke:#ff9800,stroke-width:2px,color:#fff;
+    classDef service fill:#2e7d32,stroke:#4caf50,stroke-width:2px,color:#fff;
+
+    class HML,RML foundation;
+    class CL,TL,SL service;
+```
+
+Key aspects:
+- Health Monitoring ensures system reliability
+- Resource Management controls system resources
+- Both systems support core service components
+
+#### 1.1.3 Error Handling Flow
+
+The error handling relationships across the system:
+
+```mermaid
+graph TD
+    %% Components
+    EHL[Error Handler]
+    CL[Connection]
+    TL[Tool]
+    SL[Session]
+    HML[Health Monitor]
+
+    %% Error Flow
+    CL -->|reports| EHL
+    TL -->|reports| EHL
+    SL -->|reports| EHL
+    HML -->|reports| EHL
+
+    EHL -->|triggers recovery| HML
+    EHL -->|affects| CL
+    EHL -->|affects| SL
+
+    %% Styling
+    classDef foundation fill:#f57c00,stroke:#ff9800,stroke-width:2px,color:#fff;
+    classDef service fill:#2e7d32,stroke:#4caf50,stroke-width:2px,color:#fff;
+
+    class EHL,HML foundation;
+    class CL,TL,SL service;
+```
+
+Key flows:
+- All components report errors to Error Handler
+- Error Handler coordinates with Health Monitor
+- Recovery actions affect service components
+
+#### 1.1.4 Monitoring and Logging
+
+The observability layer of the system:
+
+```mermaid
+graph TD
+    %% Components
+    LML[Logging & Monitoring]
+    PL[Provider]
+    CL[Connection]
+    TL[Tool]
+    SL[Session]
+    HML[Health]
+    RML[Resources]
+    EHL[Errors]
+
+    %% Logging Dependencies
+    LML -.->|observes| PL
+    LML -.->|observes| CL
+    LML -.->|observes| TL
+    LML -.->|observes| SL
+    LML -.->|observes| HML
+    LML -.->|observes| RML
+    LML -.->|observes| EHL
+
+    %% Styling
     classDef core fill:#7b1fa2,stroke:#9c27b0,stroke-width:3px,color:#fff,font-weight:bold;
     classDef service fill:#2e7d32,stroke:#4caf50,stroke-width:2px,color:#fff;
     classDef foundation fill:#f57c00,stroke:#ff9800,stroke-width:2px,color:#fff;
     classDef observability fill:#0288d1,stroke:#03a9f4,stroke-width:2px,color:#fff;
 
-    %% Apply styles
     class PL core;
     class CL,TL,SL service;
-    class RML,HML,EHL foundation;
+    class HML,RML,EHL foundation;
     class LML observability;
-
 ```
 
-Key relationships:
-1. **Provider Lifecycle (Core Layer)**
-   - Central coordinator for all system components
-   - Manages initialization and shutdown
-   - Controls service lifecycles
-   - Oversees resource management
-
-2. **Service Layer**
-   - **Connection Lifecycle**: Manages server connections
-   - **Tool Lifecycle**: Handles tool registration and execution
-   - **Session Lifecycle**: Controls active sessions
-   - All services depend on core provider
-
-3. **Foundation Layer**
-   - **Resource Management**: Handles resource allocation/cleanup
-   - **Health Monitoring**: Ensures system health
-   - **Error Handling**: Provides recovery mechanisms
-   - Supports all upper layers
-
-4. **Observability Layer**
-   - Monitors all system components
-   - Provides insights and metrics
-   - Records system events
-   - Non-intrusive observation (dotted lines)
-
-The diagram uses:
-- Dark backgrounds with high contrast colors
-- Logical grouping by layers
-- Clear visual hierarchy
-- Consistent styling with other diagrams
-- Explicit relationship indicators
+Key aspects:
+- Non-intrusive observation of all components
+- Comprehensive system monitoring
+- No direct operational impact
 
 ### 1.2 System Interaction Flow
 
