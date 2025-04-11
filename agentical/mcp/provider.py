@@ -331,40 +331,6 @@ class MCPToolProvider:
             )
             raise  # Re-raise the exception after logging
 
-    async def cleanup(self, server_name: str) -> None:
-        """Clean up all resources for a specific server."""
-        start_time = time.time()
-        logger.info("Cleaning up server", extra={"server_name": server_name})
-
-        try:
-            # Clean up connection
-            await self.connection_service.cleanup(server_name)
-
-            # Remove tools
-            self.tool_registry.remove_server_tools(server_name)
-
-            # Remove resources
-            self.resource_registry.remove_server_resources(server_name)
-
-            # Remove prompts
-            self.prompt_registry.remove_server_prompts(server_name)
-
-            duration = time.time() - start_time
-            logger.info(
-                "Server cleanup successful",
-                extra={"server_name": server_name, "duration_ms": int(duration * 1000)},
-            )
-        except Exception as e:
-            duration = time.time() - start_time
-            logger.error(
-                "Server cleanup failed",
-                extra={
-                    "server_name": server_name,
-                    "error": sanitize_log_message(str(e)),
-                    "duration_ms": int(duration * 1000),
-                },
-            )
-            raise  # Re-raise the exception after logging
 
     async def reconnect(self, server_name: str) -> bool:
         """Attempt to reconnect to a server."""

@@ -447,7 +447,7 @@ async def test_cleanup_error(mock_llm_backend, valid_server_configs, mock_sessio
         # Mock cleanup to raise an error
         with patch.object(provider.connection_service, "disconnect", side_effect=Exception("Cleanup failed")):
             # Should not raise an exception, just log the error
-            await provider.cleanup("server1")
+            await provider.cleanup_all()
             # Verify tools were still removed
             assert len(provider.tool_registry.all_tools) == 0
 

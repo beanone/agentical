@@ -254,7 +254,7 @@ async def run_demo(llm_backend: LLMBackend, config_provider: MCPConfigProvider |
         # This avoids double cleanup messages while ensuring cleanup happens
         if sys.exc_info()[0] is not None:
             logger.info("Starting demo cleanup after error")
-        await provider.cleanup()
+        await provider.cleanup_all()
         print("Cleanup completed")
 
     duration = time.time() - start_time

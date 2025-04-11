@@ -161,7 +161,7 @@ async def main():
         response = await provider.process_query("What tools are available?")
         print(response)
     finally:
-        await provider.cleanup()
+        await provider.cleanup_all()
 ```
 
 ## Quick Links
