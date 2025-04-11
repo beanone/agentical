@@ -99,6 +99,8 @@ Here are some example queries that demonstrate the power of combining multiple s
    - Get current weather in Beijing
    - Calculate and display the temperature difference
 
+   Note: Calculator-server is specified because LLMs typically do the math themselves but we want to demo the multi-tool use example.
+
    **Research and Local Storage**:
    ```
    Search for Python async best practices and save them to a local markdown file
@@ -334,7 +336,7 @@ For more detailed troubleshooting, see the [Error Handling](docs/api/error_handl
 
 ### Prerequisites
 
-- Python 3.12+
+- Python 3.12+ (Lower versions may work but are not officially tested)
 
 ### Setup Development Environment
 
