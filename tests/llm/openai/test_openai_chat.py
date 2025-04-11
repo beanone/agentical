@@ -8,13 +8,13 @@ import pytest
 from mcp.types import Tool as MCPTool
 from openai.types.chat import ChatCompletion, ChatCompletionMessage
 
-from agentical.openai_backend.openai_chat import OpenAIBackend
+from agentical.llm.openai.openai_chat import OpenAIBackend
 
 
 @pytest.fixture
 def mock_openai_client():
     """Fixture providing a mock OpenAI client."""
-    with patch("agentical.openai_backend.openai_chat.openai.AsyncOpenAI") as mock:
+    with patch("agentical.llm.openai.openai_chat.openai.AsyncOpenAI") as mock:
         yield mock
 
 
@@ -386,7 +386,7 @@ def test_init_with_custom_model(mock_env_vars):
 def test_init_with_invalid_api_key():
     """Test initialization with invalid API key."""
     with patch(
-        "agentical.openai_backend.openai_chat.openai.AsyncOpenAI",
+        "agentical.llm.openai.openai_chat.openai.AsyncOpenAI",
         side_effect=Exception("Invalid API key"),
     ):
         with pytest.raises(

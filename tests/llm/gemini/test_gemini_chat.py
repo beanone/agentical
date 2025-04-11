@@ -9,7 +9,7 @@ from google.genai.types import Candidate, Content, GenerateContentResponse, Part
 from mcp.types import CallToolResult, TextContent
 from mcp.types import Tool as MCPTool
 
-from agentical.gemini_backend.gemini_chat import GeminiBackend
+from agentical.llm.gemini.gemini_chat import GeminiBackend
 
 
 @pytest.fixture

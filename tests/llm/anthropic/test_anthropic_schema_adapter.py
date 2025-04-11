@@ -3,7 +3,7 @@
 from anthropic.types import Message
 from mcp.types import Tool as MCPTool
 
-from agentical.anthropic_backend.schema_adapter import SchemaAdapter
+from agentical.llm.anthropic.schema_adapter import SchemaAdapter
 
 
 def test_extract_answer():

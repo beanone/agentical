@@ -5,7 +5,7 @@ import asyncio
 from dotenv import load_dotenv
 
 from agentical import chat_client
-from agentical.anthropic_backend.anthropic_chat import AnthropicBackend
+from agentical.llm.anthropic.anthropic_chat import AnthropicBackend
 from agentical.mcp.config import FileBasedMCPConfigProvider
 
 # Load environment variables

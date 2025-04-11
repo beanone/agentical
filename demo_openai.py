@@ -6,7 +6,7 @@ import logging
 from agentical import chat_client
 from agentical.logging_config import setup_logging
 from agentical.mcp.config import FileBasedMCPConfigProvider
-from agentical.openai_backend.openai_chat import OpenAIBackend
+from agentical.llm.openai.openai_chat import OpenAIBackend
 
 
 async def main():

@@ -11,7 +11,7 @@ from anthropic.types import Message, Usage
 from mcp.types import CallToolResult, TextContent
 from mcp.types import Tool as MCPTool
 
-from agentical.anthropic_backend.anthropic_chat import AnthropicBackend
+from agentical.llm.anthropic.anthropic_chat import AnthropicBackend
 
 
 @pytest.fixture

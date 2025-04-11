@@ -3,7 +3,7 @@
 import asyncio
 
 from agentical import chat_client
-from agentical.gemini_backend.gemini_chat import GeminiBackend
+from agentical.llm.gemini.gemini_chat import GeminiBackend
 from agentical.mcp.config import FileBasedMCPConfigProvider
 
 
