@@ -672,8 +672,7 @@ class MCPToolProvider:
                 resources=self.resource_registry.all_resources,
                 prompts=self.prompt_registry.all_prompts,
                 execute_tool=execute_tool,
-                get_resource=get_resource,
-                get_prompt=get_prompt,
+                context=None,
             )
             duration = time.time() - start_time
             logger.info(

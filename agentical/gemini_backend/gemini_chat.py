@@ -20,7 +20,7 @@ from .schema_adapter import SchemaAdapter
 logger = logging.getLogger(__name__)
 
 
-class GeminiBackend(LLMBackend):
+class GeminiBackend(LLMBackend[list[dict[str, Any]]]):
     """Gemini implementation for chat interactions."""
 
     DEFAULT_MODEL = "gemini-2.0-flash-001"
@@ -127,6 +127,8 @@ class GeminiBackend(LLMBackend):
         self,
         query: str,
         tools: list[MCPTool],
+        resources: list[MCPResource],
+        prompts: list[MCPPrompt],
         execute_tool: Callable[[str, dict[str, Any]], CallToolResult],
         context: list[dict[str, Any]] | None = None,
     ) -> str:
@@ -135,6 +137,8 @@ class GeminiBackend(LLMBackend):
         Args:
             query: The user's query
             tools: List of available MCP tools
+            resources: List of available MCP resources
+            prompts: List of available MCP prompts
             execute_tool: Function to execute a tool call
             context: Optional conversation context
 
@@ -148,6 +152,8 @@ class GeminiBackend(LLMBackend):
                 extra={
                     "query": query,
                     "num_tools": len(tools),
+                    "num_resources": len(resources),
+                    "num_prompts": len(prompts),
                     "has_context": context is not None,
                 },
             )
@@ -161,7 +167,7 @@ class GeminiBackend(LLMBackend):
             while True:  # Continue until we get a response without tool calls
                 # Get response from Gemini
                 api_start = time.time()
-                response = self.client.models.generate_content(
+                response = await self.client.models.generate_content(
                     model=self.model,
                     contents=contents,
                     config=genai.types.GenerateContentConfig(
@@ -222,6 +228,7 @@ class GeminiBackend(LLMBackend):
                                         "duration_ms": int(tool_duration * 1000),
                                     },
                                 )
+                                # Add error response to context
                                 contents.extend(
                                     self.schema_adapter.create_tool_response_content(
                                         function_call_part=part,
@@ -229,31 +236,30 @@ class GeminiBackend(LLMBackend):
                                         error=str(e),
                                     )
                                 )
-                        elif hasattr(part, "text"):
+                        else:
                             final_text.append(part.text)
 
-                # If no tool calls were made, return the final response
+                # If no tool calls, return the final response
                 if not has_tool_calls:
                     duration = time.time() - start_time
                     logger.info(
                         "Query completed without tool calls",
                         extra={"duration_ms": int(duration * 1000)},
                     )
-                    return (
-                        "\n".join(final_text) if final_text else "No response generated"
-                    )
+                    return " ".join(final_text) or "No response generated"
 
                 # Continue the loop to handle more tool calls
 
         except Exception as e:
             duration = time.time() - start_time
-            error_msg = sanitize_log_message(f"Error in Gemini conversation: {e!s}")
             logger.error(
-                error_msg,
-                extra={"error": str(e), "duration_ms": int(duration * 1000)},
-                exc_info=True,
+                "Error in Gemini conversation",
+                extra={
+                    "error": sanitize_log_message(str(e)),
+                    "duration_ms": int(duration * 1000),
+                },
             )
-            raise ValueError(error_msg)
+            raise ValueError(f"Error in Gemini conversation: {e!s}")
         finally:
             duration = time.time() - start_time
             logger.info(

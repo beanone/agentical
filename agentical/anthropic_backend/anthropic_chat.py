@@ -22,7 +22,7 @@ from .schema_adapter import SchemaAdapter
 logger = logging.getLogger(__name__)
 
 
-class AnthropicBackend(LLMBackend):
+class AnthropicBackend(LLMBackend[list[dict[str, Any]]]):
     """Anthropic implementation for chat interactions."""
 
     DEFAULT_MODEL = "claude-3-opus-20240229"
@@ -117,6 +117,8 @@ class AnthropicBackend(LLMBackend):
         self,
         query: str,
         tools: list[MCPTool],
+        resources: list[MCPResource],
+        prompts: list[MCPPrompt],
         execute_tool: Callable[[str, dict[str, Any]], CallToolResult],
         context: list[dict[str, Any]] | None = None,
     ) -> str:
@@ -125,6 +127,8 @@ class AnthropicBackend(LLMBackend):
         Args:
             query: The user's query
             tools: List of available MCP tools
+            resources: List of available MCP resources
+            prompts: List of available MCP prompts
             execute_tool: Function to execute a tool call
             context: Optional conversation context
 
@@ -141,6 +145,8 @@ class AnthropicBackend(LLMBackend):
                 extra={
                     "query": query,
                     "num_tools": len(tools),
+                    "num_resources": len(resources),
+                    "num_prompts": len(prompts),
                     "has_context": context is not None,
                 },
             )

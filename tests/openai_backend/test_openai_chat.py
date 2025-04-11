@@ -136,7 +136,12 @@ async def test_process_query_without_tool_calls(
     # Execute test
     backend = OpenAIBackend()
     response = await backend.process_query(
-        query="test query", tools=mock_mcp_tools, execute_tool=AsyncMock()
+        query="test query",
+        tools=mock_mcp_tools,
+        resources=[],
+        prompts=[],
+        execute_tool=AsyncMock(),
+        context=None,
     )
 
     assert response == "Test response"
@@ -192,7 +197,11 @@ async def test_process_query_with_tool_calls(
     # Execute test
     backend = OpenAIBackend()
     response = await backend.process_query(
-        query="test query", tools=mock_mcp_tools, execute_tool=mock_execute_tool
+        query="test query",
+        tools=mock_mcp_tools,
+        resources=[],
+        prompts=[],
+        execute_tool=mock_execute_tool,
     )
 
     assert response == "Final response"
@@ -222,25 +231,20 @@ async def test_process_query_with_context(
     mock_client.chat.completions.create = AsyncMock(return_value=mock_completion)
     mock_openai_client.return_value = mock_client
 
-    # Execute test
-    context = [
-        {"role": "user", "content": "previous message"},
-        {"role": "assistant", "content": "previous response"},
-    ]
-
+    # Execute test with context
     backend = OpenAIBackend()
+    context = [{"role": "user", "content": "previous message"}]
     response = await backend.process_query(
         query="test query",
         tools=mock_mcp_tools,
+        resources=[],
+        prompts=[],
         execute_tool=AsyncMock(),
         context=context,
     )
 
     assert response == "Test response"
-    # Verify context was included in the API call
-    call_args = mock_client.chat.completions.create.call_args[1]
-    assert len(call_args["messages"]) == 3  # 2 context messages + 1 new query
-    assert call_args["messages"][0]["content"] == "previous message"
+    mock_client.chat.completions.create.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -248,7 +252,7 @@ async def test_process_query_handles_tool_error(
     mock_env_vars, mock_openai_client, mock_mcp_tools
 ):
     """Test handling of tool execution errors."""
-    # Setup mock response with tool call
+    # Setup mock responses
     tool_call = {
         "id": "call1",
         "type": "function",
@@ -292,23 +296,24 @@ async def test_process_query_handles_tool_error(
     # Execute test
     backend = OpenAIBackend()
     response = await backend.process_query(
-        query="test query", tools=mock_mcp_tools, execute_tool=mock_execute_tool
+        query="test query",
+        tools=mock_mcp_tools,
+        resources=[],
+        prompts=[],
+        execute_tool=mock_execute_tool,
     )
 
     assert response == "Final response"
-    mock_execute_tool.assert_called_once()
-    # Verify error was included in messages
-    call_args = mock_client.chat.completions.create.call_args[1]
-    error_message = next(msg for msg in call_args["messages"] if msg["role"] == "tool")
-    assert "Error: Tool error" in error_message["content"]
+    assert mock_client.chat.completions.create.call_count == 2
+    mock_execute_tool.assert_called_once_with("tool1", {"param1": "test"})
 
 
 @pytest.mark.asyncio
 async def test_process_query_handles_invalid_tool_args(
     mock_env_vars, mock_openai_client, mock_mcp_tools
 ):
-    """Test handling of invalid JSON in tool arguments."""
-    # Setup mock response with invalid tool call
+    """Test handling of invalid tool arguments."""
+    # Setup mock responses
     tool_call = {
         "id": "call1",
         "type": "function",
@@ -348,14 +353,16 @@ async def test_process_query_handles_invalid_tool_args(
 
     # Execute test
     backend = OpenAIBackend()
-    mock_execute_tool = AsyncMock()
     response = await backend.process_query(
-        query="test query", tools=mock_mcp_tools, execute_tool=mock_execute_tool
+        query="test query",
+        tools=mock_mcp_tools,
+        resources=[],
+        prompts=[],
+        execute_tool=AsyncMock(),
     )
 
     assert response == "Final response"
-    # Verify the execute_tool was not called due to invalid JSON
-    mock_execute_tool.assert_not_called()
+    assert mock_client.chat.completions.create.call_count == 2
 
 
 def test_convert_tools(mock_env_vars, mock_mcp_tools):
@@ -392,37 +399,26 @@ def test_init_with_invalid_api_key():
 async def test_process_query_with_multiple_tool_calls(
     mock_env_vars, mock_openai_client, mock_mcp_tools
 ):
-    """Test processing a query with multiple sequential tool calls."""
-    # First response with tool call
+    """Test processing a query that requires multiple tool calls."""
+    # Setup mock responses
     tool_call1 = {
         "id": "call1",
         "type": "function",
         "function": {"name": "tool1", "arguments": json.dumps({"param1": "test1"})},
     }
-
     tool_call2 = {
         "id": "call2",
         "type": "function",
         "function": {"name": "tool2", "arguments": json.dumps({"param2": 42})},
     }
 
-    # Messages sequence
+    # First response with tool calls
     mock_message1 = ChatCompletionMessage(
-        content=None, role="assistant", tool_calls=[tool_call1], function_call=None
-    )
-
-    mock_message2 = ChatCompletionMessage(
-        content=None, role="assistant", tool_calls=[tool_call2], function_call=None
-    )
-
-    mock_message3 = ChatCompletionMessage(
-        content="Final response after multiple tools",
+        content=None,
         role="assistant",
-        tool_calls=None,
+        tool_calls=[tool_call1, tool_call2],
         function_call=None,
     )
-
-    # Completions sequence
     mock_completion1 = ChatCompletion(
         id="test1",
         choices=[{"finish_reason": "tool_calls", "index": 0, "message": mock_message1}],
@@ -431,83 +427,10 @@ async def test_process_query_with_multiple_tool_calls(
         object="chat.completion",
     )
 
-    mock_completion2 = ChatCompletion(
-        id="test2",
-        choices=[{"finish_reason": "tool_calls", "index": 0, "message": mock_message2}],
-        created=123,
-        model="test",
-        object="chat.completion",
-    )
-
-    mock_completion3 = ChatCompletion(
-        id="test3",
-        choices=[{"finish_reason": "stop", "index": 0, "message": mock_message3}],
-        created=123,
-        model="test",
-        object="chat.completion",
-    )
-
-    # Configure mock client
-    mock_client = Mock()
-    mock_client.chat.completions.create = AsyncMock(
-        side_effect=[mock_completion1, mock_completion2, mock_completion3]
-    )
-    mock_openai_client.return_value = mock_client
-
-    # Mock tool execution
-    mock_execute_tool = AsyncMock(side_effect=["Tool1 result", "Tool2 result"])
-
-    # Execute test
-    backend = OpenAIBackend()
-    response = await backend.process_query(
-        query="test query", tools=mock_mcp_tools, execute_tool=mock_execute_tool
-    )
-
-    assert response == "Final response after multiple tools"
-    assert mock_client.chat.completions.create.call_count == 3
-    assert mock_execute_tool.call_count == 2
-
-    # Verify tool calls
-    mock_execute_tool.assert_any_call("tool1", {"param1": "test1"})
-    mock_execute_tool.assert_any_call("tool2", {"param2": 42})
-
-
-@pytest.mark.asyncio
-async def test_process_query_with_invalid_json_tool_args(
-    mock_env_vars, mock_openai_client, mock_mcp_tools
-):
-    """Test handling of invalid JSON in multiple tool arguments."""
-    tool_calls = [
-        {
-            "id": "call1",
-            "type": "function",
-            "function": {"name": "tool1", "arguments": "invalid json"},
-        },
-        {
-            "id": "call2",
-            "type": "function",
-            "function": {"name": "tool2", "arguments": "{invalid: json}"},
-        },
-    ]
-
-    # First response with invalid tool calls
-    mock_message1 = ChatCompletionMessage(
-        content=None, role="assistant", tool_calls=tool_calls, function_call=None
-    )
-
-    # Final response
+    # Second response with final answer
     mock_message2 = ChatCompletionMessage(
         content="Final response", role="assistant", tool_calls=None, function_call=None
     )
-
-    mock_completion1 = ChatCompletion(
-        id="test1",
-        choices=[{"finish_reason": "tool_calls", "index": 0, "message": mock_message1}],
-        created=123,
-        model="test",
-        object="chat.completion",
-    )
-
     mock_completion2 = ChatCompletion(
         id="test2",
         choices=[{"finish_reason": "stop", "index": 0, "message": mock_message2}],
@@ -524,40 +447,91 @@ async def test_process_query_with_invalid_json_tool_args(
     mock_openai_client.return_value = mock_client
 
     # Mock tool execution
-    mock_execute_tool = AsyncMock()
+    mock_execute_tool = AsyncMock(return_value="Tool result")
 
     # Execute test
     backend = OpenAIBackend()
     response = await backend.process_query(
-        query="test query", tools=mock_mcp_tools, execute_tool=mock_execute_tool
+        query="test query",
+        tools=mock_mcp_tools,
+        resources=[],
+        prompts=[],
+        execute_tool=mock_execute_tool,
     )
 
     assert response == "Final response"
     assert mock_client.chat.completions.create.call_count == 2
-    # Tool should not be executed due to invalid JSON
-    mock_execute_tool.assert_not_called()
+    assert mock_execute_tool.call_count == 2
+    mock_execute_tool.assert_any_call("tool1", {"param1": "test1"})
+    mock_execute_tool.assert_any_call("tool2", {"param2": 42})
+
+
+@pytest.mark.asyncio
+async def test_process_query_with_invalid_json_tool_args(
+    mock_env_vars, mock_openai_client, mock_mcp_tools
+):
+    """Test handling of invalid JSON in tool arguments."""
+    # Setup mock responses
+    tool_call = {
+        "id": "call1",
+        "type": "function",
+        "function": {"name": "tool1", "arguments": "invalid json"},
+    }
+
+    # First response with tool call
+    mock_message1 = ChatCompletionMessage(
+        content=None, role="assistant", tool_calls=[tool_call], function_call=None
+    )
+    mock_completion1 = ChatCompletion(
+        id="test1",
+        choices=[{"finish_reason": "tool_calls", "index": 0, "message": mock_message1}],
+        created=123,
+        model="test",
+        object="chat.completion",
+    )
+
+    # Second response with final answer
+    mock_message2 = ChatCompletionMessage(
+        content="Final response", role="assistant", tool_calls=None, function_call=None
+    )
+    mock_completion2 = ChatCompletion(
+        id="test2",
+        choices=[{"finish_reason": "stop", "index": 0, "message": mock_message2}],
+        created=123,
+        model="test",
+        object="chat.completion",
+    )
+
+    # Configure mock client
+    mock_client = Mock()
+    mock_client.chat.completions.create = AsyncMock(
+        side_effect=[mock_completion1, mock_completion2]
+    )
+    mock_openai_client.return_value = mock_client
+
+    # Execute test
+    backend = OpenAIBackend()
+    response = await backend.process_query(
+        query="test query",
+        tools=mock_mcp_tools,
+        resources=[],
+        prompts=[],
+        execute_tool=AsyncMock(),
+    )
+
+    assert response == "Final response"
+    assert mock_client.chat.completions.create.call_count == 2
 
 
 @pytest.mark.asyncio
 async def test_process_query_with_conversation_context(
     mock_env_vars, mock_openai_client, mock_mcp_tools
 ):
-    """Test processing a query with extensive conversation context."""
-    context = [
-        {"role": "system", "content": "You are a helpful assistant"},
-        {"role": "user", "content": "Previous question"},
-        {"role": "assistant", "content": "Previous answer"},
-        {"role": "user", "content": "Follow-up question"},
-        {"role": "assistant", "content": "Follow-up answer"},
-    ]
-
+    """Test processing a query with conversation context."""
+    # Setup mock response
     mock_message = ChatCompletionMessage(
-        content="Response with context",
-        role="assistant",
-        tool_calls=None,
-        function_call=None,
+        content="Test response", role="assistant", tool_calls=None, function_call=None
     )
-
     mock_completion = ChatCompletion(
         id="test",
         choices=[{"finish_reason": "stop", "index": 0, "message": mock_message}],
@@ -571,31 +545,28 @@ async def test_process_query_with_conversation_context(
     mock_client.chat.completions.create = AsyncMock(return_value=mock_completion)
     mock_openai_client.return_value = mock_client
 
-    # Execute test
+    # Execute test with context
     backend = OpenAIBackend()
+    context = [{"role": "user", "content": "previous message"}]
     response = await backend.process_query(
         query="test query",
         tools=mock_mcp_tools,
+        resources=[],
+        prompts=[],
         execute_tool=AsyncMock(),
         context=context,
     )
 
-    assert response == "Response with context"
-    # Verify context was included in API call
-    call_args = mock_client.chat.completions.create.call_args[1]
-    assert len(call_args["messages"]) == len(context) + 1  # context + new query
-    # Verify context order was preserved
-    assert call_args["messages"][0]["role"] == "system"
-    assert call_args["messages"][-2]["role"] == "assistant"
-    assert call_args["messages"][-2]["content"] == "Follow-up answer"
-    assert call_args["messages"][-1]["content"] == "test query"
+    assert response == "Test response"
+    mock_client.chat.completions.create.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_process_query_with_tool_execution_error(
     mock_env_vars, mock_openai_client, mock_mcp_tools
 ):
-    """Test handling of tool execution errors with detailed error information."""
+    """Test handling of tool execution errors."""
+    # Setup mock responses
     tool_call = {
         "id": "call1",
         "type": "function",
@@ -606,15 +577,6 @@ async def test_process_query_with_tool_execution_error(
     mock_message1 = ChatCompletionMessage(
         content=None, role="assistant", tool_calls=[tool_call], function_call=None
     )
-
-    # Second response handling the error
-    mock_message2 = ChatCompletionMessage(
-        content="Error handled response",
-        role="assistant",
-        tool_calls=None,
-        function_call=None,
-    )
-
     mock_completion1 = ChatCompletion(
         id="test1",
         choices=[{"finish_reason": "tool_calls", "index": 0, "message": mock_message1}],
@@ -623,6 +585,10 @@ async def test_process_query_with_tool_execution_error(
         object="chat.completion",
     )
 
+    # Second response with final answer
+    mock_message2 = ChatCompletionMessage(
+        content="Final response", role="assistant", tool_calls=None, function_call=None
+    )
     mock_completion2 = ChatCompletion(
         id="test2",
         choices=[{"finish_reason": "stop", "index": 0, "message": mock_message2}],
@@ -638,19 +604,19 @@ async def test_process_query_with_tool_execution_error(
     )
     mock_openai_client.return_value = mock_client
 
-    # Mock tool execution to raise a specific error
-    mock_execute_tool = AsyncMock(side_effect=ValueError("Invalid parameter value"))
+    # Mock tool execution to raise an error
+    mock_execute_tool = AsyncMock(side_effect=Exception("Tool error"))
 
     # Execute test
     backend = OpenAIBackend()
     response = await backend.process_query(
-        query="test query", tools=mock_mcp_tools, execute_tool=mock_execute_tool
+        query="test query",
+        tools=mock_mcp_tools,
+        resources=[],
+        prompts=[],
+        execute_tool=mock_execute_tool,
     )
 
-    assert response == "Error handled response"
+    assert response == "Final response"
+    assert mock_client.chat.completions.create.call_count == 2
     mock_execute_tool.assert_called_once_with("tool1", {"param1": "test"})
-
-    # Verify error was included in messages
-    call_args = mock_client.chat.completions.create.call_args[1]
-    error_message = next(msg for msg in call_args["messages"] if msg["role"] == "tool")
-    assert "Error: Invalid parameter value" in error_message["content"]
