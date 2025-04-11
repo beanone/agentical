@@ -56,27 +56,3 @@ class LLMBackend(ABC, Generic[Context]):
             Tools in the format expected by this LLM implementation
         """
         pass
-
-    @abstractmethod
-    def convert_resources(self, resources: list[MCPResource]) -> list[MCPResource]:
-        """Convert MCP resources to the format expected by this LLM.
-
-        Args:
-            resources: List of MCP resources to convert
-
-        Returns:
-            Resources in the format expected by this LLM implementation
-        """
-        pass
-
-    @abstractmethod
-    def convert_prompts(self, prompts: list[MCPPrompt]) -> list[MCPPrompt]:
-        """Convert MCP prompts to the format expected by this LLM.
-
-        Args:
-            prompts: List of MCP prompts to convert
-
-        Returns:
-            Prompts in the format expected by this LLM implementation
-        """
-        pass
