@@ -167,7 +167,7 @@ class GeminiBackend(LLMBackend[list[dict[str, Any]]]):
             while True:  # Continue until we get a response without tool calls
                 # Get response from Gemini
                 api_start = time.time()
-                response = await self.client.models.generate_content(
+                response = self.client.models.generate_content(
                     model=self.model,
                     contents=contents,
                     config=genai.types.GenerateContentConfig(
