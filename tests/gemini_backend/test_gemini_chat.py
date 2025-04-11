@@ -2,7 +2,6 @@
 
 import os
 from unittest.mock import AsyncMock, Mock, patch
-import json
 
 import pytest
 from google import genai
@@ -150,7 +149,8 @@ async def test_process_query_without_tool_calls(
 
     # Configure mock client
     mock_client = Mock()
-    mock_client.models.generate_content = AsyncMock(return_value=mock_response)
+    mock_client.models.generate_content = Mock()
+    mock_client.models.generate_content.return_value = mock_response
     mock_genai_client.return_value = mock_client
 
     # Execute test
@@ -186,9 +186,7 @@ async def test_process_query_with_tool_calls(
 
     # Configure mock client
     mock_client = Mock()
-    mock_client.models.generate_content = AsyncMock(
-        side_effect=[mock_response1, mock_response2]
-    )
+    mock_client.models.generate_content = Mock(side_effect=[mock_response1, mock_response2])
     mock_genai_client.return_value = mock_client
 
     # Mock tool execution
@@ -232,9 +230,7 @@ async def test_process_query_with_tool_error(
 
     # Configure mock client
     mock_client = Mock()
-    mock_client.models.generate_content = AsyncMock(
-        side_effect=[mock_response1, mock_response2]
-    )
+    mock_client.models.generate_content = Mock(side_effect=[mock_response1, mock_response2])
     mock_genai_client.return_value = mock_client
 
     # Mock tool execution to raise error
@@ -264,7 +260,7 @@ async def test_process_query_with_no_candidates(
 
     # Configure mock client
     mock_client = Mock()
-    mock_client.models.generate_content = AsyncMock(return_value=mock_response)
+    mock_client.models.generate_content = Mock(return_value=mock_response)
     mock_genai_client.return_value = mock_client
 
     # Execute test
@@ -300,7 +296,7 @@ async def test_process_query_with_context(
 
     # Configure mock client
     mock_client = Mock()
-    mock_client.models.generate_content = AsyncMock(return_value=mock_response)
+    mock_client.models.generate_content = Mock(return_value=mock_response)
     mock_genai_client.return_value = mock_client
 
     # Execute test
@@ -344,7 +340,7 @@ async def test_process_query_with_api_error(
     """Test handling of API errors."""
     # Configure mock client to raise error
     mock_client = Mock()
-    mock_client.models.generate_content = AsyncMock(side_effect=Exception("API error"))
+    mock_client.models.generate_content = Mock(side_effect=Exception("API error"))
     mock_genai_client.return_value = mock_client
 
     # Execute test
