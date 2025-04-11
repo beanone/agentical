@@ -20,6 +20,7 @@ Example:
 """
 
 import logging
+from typing import Dict, List, Set, Tuple
 
 from mcp.types import Prompt as MCPPrompt
 
@@ -35,40 +36,104 @@ class PromptRegistry:
     Attributes:
         prompts_by_server (Dict[str, List[MCPPrompt]]): Prompts indexed by server
         all_prompts (List[MCPPrompt]): Combined list of all available prompts
+        _prompt_names (Dict[str, Set[str]]): Prompt names by server for tracking
     """
 
     def __init__(self):
         """Initialize an empty prompt registry."""
-        self.prompts_by_server: dict[str, list[MCPPrompt]] = {}
-        self.all_prompts: list[MCPPrompt] = []
+        self.prompts_by_server: Dict[str, List[MCPPrompt]] = {}
+        self.all_prompts: List[MCPPrompt] = []
+        self._prompt_names: Dict[str, Set[str]] = {}
 
-    def register_server_prompts(self, server_name: str, prompts: list[MCPPrompt]) -> None:
+    def _validate_prompt(self, prompt: MCPPrompt) -> None:
+        """Validate a single prompt.
+
+        Args:
+            prompt: Prompt to validate
+
+        Raises:
+            TypeError: If prompt is not an MCPPrompt
+            ValueError: If prompt name is empty or invalid
+        """
+        if not isinstance(prompt, MCPPrompt):
+            raise TypeError(f"Prompt must be an MCPPrompt, got {type(prompt)}")
+
+        if not prompt.name:
+            raise ValueError("Prompt name cannot be empty")
+
+        if not isinstance(prompt.name, str):
+            raise ValueError(f"Prompt name must be a string, got {type(prompt.name)}")
+
+    def _validate_prompts(self, prompts: List[MCPPrompt], server_name: str) -> None:
+        """Validate a list of prompts.
+
+        Args:
+            prompts: List of prompts to validate
+            server_name: Name of the server registering these prompts
+
+        Raises:
+            TypeError: If prompts is not a list or contains invalid types
+            ValueError: If prompt names are duplicated within the same server
+        """
+        if not isinstance(prompts, list):
+            raise TypeError(f"Prompts must be a list, got {type(prompts)}")
+
+        # Validate each prompt
+        for prompt in prompts:
+            self._validate_prompt(prompt)
+
+        # Check for duplicates within the new prompts
+        new_names = {p.name for p in prompts}
+        if len(new_names) != len(prompts):
+            raise ValueError("Duplicate prompt names found in the prompts list")
+
+    def register_server_prompts(self, server_name: str, prompts: List[MCPPrompt]) -> None:
         """Register prompts for a specific server.
 
         Args:
             server_name: Name of the server
             prompts: List of prompts to register
 
+        Raises:
+            TypeError: If prompts is not a list or contains invalid types
+            ValueError: If prompt names are duplicated within the same server
+
         Note:
             If the server already has registered prompts, they will be replaced.
             The all_prompts list is updated to include the new prompts.
+            Prompts with the same name can exist on different servers.
         """
         logger.debug(
             "Registering prompts for server",
             extra={"server_name": server_name, "num_prompts": len(prompts)},
         )
 
-        # If server already exists, remove its prompts first
-        if server_name in self.prompts_by_server:
-            self.remove_server_prompts(server_name)
+        try:
+            # Validate prompts before making any changes
+            self._validate_prompts(prompts, server_name)
 
-        self.prompts_by_server[server_name] = prompts
-        self.all_prompts.extend(prompts)
+            # If server already exists, remove its prompts first
+            if server_name in self.prompts_by_server:
+                self.remove_server_prompts(server_name)
 
-        logger.debug(
-            "Prompts registered successfully",
-            extra={"server_name": server_name, "total_prompts": len(self.all_prompts)},
-        )
+            # Update registries
+            self.prompts_by_server[server_name] = prompts
+            self.all_prompts.extend(prompts)
+            self._prompt_names[server_name] = {p.name for p in prompts}
+
+            logger.debug(
+                "Prompts registered successfully",
+                extra={"server_name": server_name, "total_prompts": len(self.all_prompts)},
+            )
+        except (TypeError, ValueError) as e:
+            logger.error(
+                "Failed to register prompts",
+                extra={
+                    "server_name": server_name,
+                    "error": str(e),
+                },
+            )
+            raise
 
     def remove_server_prompts(self, server_name: str) -> int:
         """Remove all prompts for a specific server.
@@ -86,25 +151,40 @@ class PromptRegistry:
         if server_name not in self.prompts_by_server:
             return 0
 
-        num_removed = len(self.prompts_by_server[server_name])
-        del self.prompts_by_server[server_name]
+        try:
+            # Get prompts to remove
+            removed_prompts = self.prompts_by_server[server_name]
+            num_removed = len(removed_prompts)
 
-        # Rebuild all_prompts list
-        self.all_prompts = [
-            prompt
-            for prompts in self.prompts_by_server.values()
-            for prompt in prompts
-        ]
+            # Remove from server mapping
+            del self.prompts_by_server[server_name]
+            self._prompt_names.pop(server_name, None)
 
-        logger.debug(
-            "Server prompts removed",
-            extra={
-                "server_name": server_name,
-                "num_removed": num_removed,
-                "remaining_prompts": len(self.all_prompts),
-            },
-        )
-        return num_removed
+            # Rebuild all_prompts list
+            self.all_prompts = [
+                prompt
+                for prompts in self.prompts_by_server.values()
+                for prompt in prompts
+            ]
+
+            logger.debug(
+                "Server prompts removed",
+                extra={
+                    "server_name": server_name,
+                    "num_removed": num_removed,
+                    "remaining_prompts": len(self.all_prompts),
+                },
+            )
+            return num_removed
+        except Exception as e:
+            logger.error(
+                "Error removing server prompts",
+                extra={
+                    "server_name": server_name,
+                    "error": str(e),
+                },
+            )
+            raise
 
     def find_prompt_server(self, prompt_name: str) -> str | None:
         """Find which server hosts a specific prompt.
@@ -116,16 +196,20 @@ class PromptRegistry:
             Server name if found, None otherwise
 
         Note:
-            This is an O(n) operation where n is the total number of prompts
-            across all servers. For better performance with large numbers of
-            prompts, consider adding an index.
+            If multiple servers have a prompt with the same name,
+            returns the first server found.
         """
-        for server_name, prompts in self.prompts_by_server.items():
-            if any(prompt.name == prompt_name for prompt in prompts):
+        if not prompt_name or not isinstance(prompt_name, str):
+            logger.warning("Invalid prompt name", extra={"prompt_name": prompt_name})
+            return None
+
+        # Find the server
+        for server_name, names in self._prompt_names.items():
+            if prompt_name in names:
                 return server_name
         return None
 
-    def clear(self) -> tuple[int, int]:
+    def clear(self) -> Tuple[int, int]:
         """Clear all registered prompts.
 
         Returns:
@@ -135,19 +219,25 @@ class PromptRegistry:
             This operation completely resets the registry state.
             Both prompts_by_server and all_prompts collections are cleared.
         """
-        num_prompts = len(self.all_prompts)
-        num_servers = len(self.prompts_by_server)
+        try:
+            num_prompts = len(self.all_prompts)
+            num_servers = len(self.prompts_by_server)
 
-        logger.debug(
-            "Clearing prompt registry",
-            extra={"num_prompts": num_prompts, "num_servers": num_servers},
-        )
+            logger.debug(
+                "Clearing prompt registry",
+                extra={"num_prompts": num_prompts, "num_servers": num_servers},
+            )
 
-        self.prompts_by_server.clear()
-        self.all_prompts.clear()
-        return num_prompts, num_servers
+            self.prompts_by_server.clear()
+            self.all_prompts.clear()
+            self._prompt_names.clear()
 
-    def get_server_prompts(self, server_name: str) -> list[MCPPrompt]:
+            return num_prompts, num_servers
+        except Exception as e:
+            logger.error("Error clearing prompt registry", extra={"error": str(e)})
+            raise
+
+    def get_server_prompts(self, server_name: str) -> List[MCPPrompt]:
         """Get all prompts registered for a specific server.
 
         Args:

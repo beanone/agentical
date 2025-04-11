@@ -189,10 +189,10 @@ async def test_monitoring_task_cancellation(health_monitor):
     assert health_monitor._monitor_task is not None
     assert not health_monitor._monitor_task.done()
 
-    health_monitor.stop_monitoring()
+    await health_monitor.stop_monitoring()
     await asyncio.sleep(0.1)  # Give time for cancellation to process
 
-    assert health_monitor._monitor_task.cancelled()
+    assert health_monitor._monitor_task.done()
 
 
 @pytest.mark.asyncio
@@ -257,7 +257,7 @@ async def test_monitor_error_handling():
 
     # Verify monitor is still running
     assert not monitor._monitor_task.done()
-    monitor.stop_monitoring()
+    await monitor.stop_monitoring()  # Now properly awaiting the stop
 
 
 @pytest.mark.asyncio

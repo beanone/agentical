@@ -51,9 +51,9 @@ Implementation Notes:
 import logging
 import time
 from contextlib import AsyncExitStack
-from typing import Any
+from typing import Any, Dict, List, Optional, Tuple
 
-from mcp.types import CallToolResult
+from mcp.types import CallToolResult, Resource as MCPResource, Prompt as MCPPrompt, Tool as MCPTool
 
 from agentical.api import LLMBackend
 from agentical.mcp.config import DictBasedMCPConfigProvider, MCPConfigProvider
@@ -110,6 +110,7 @@ class MCPToolProvider:
         self.tool_registry = ToolRegistry()
         self.resource_registry = ResourceRegistry()
         self.prompt_registry = PromptRegistry()
+        self._connected_servers: Dict[str, bool] = {}
 
         # Store configuration source
         self.config_provider = config_provider
@@ -162,50 +163,57 @@ class MCPToolProvider:
         start_time = time.time()
         logger.info("Connecting to server", extra={"server_name": server_name})
 
+        if not isinstance(server_name, str) or not server_name.strip():
+            logger.error("Invalid server name", extra={"server_name": server_name})
+            raise ValueError("server_name must be a non-empty string")
+
         if server_name not in self.available_servers:
             logger.error(
                 "Unknown server",
                 extra={
                     "server_name": server_name,
-                    "available_servers": list(self.available_servers.keys()),
+                    "available_servers": self.list_available_servers(),
                 },
             )
             raise ValueError(
                 f"Unknown server: {server_name}. "
-                f"Available servers: {list(self.available_servers.keys())}"
+                f"Available servers: {self.list_available_servers()}"
             )
 
         try:
-            # Connect using connection service
+            # Connect using connection service with config
             session = await self.connection_service.connect(
                 server_name, self.available_servers[server_name]
             )
 
-            # Initialize and get tools, resources, and prompts
-            tools_response = await session.list_tools()
-            resources_response = await session.list_resources()
-            prompts_response = await session.list_prompts()
+            # Initialize and get tools
+            response = await session.list_tools()
+            self.tool_registry.register_server_tools(server_name, response.tools)
 
-            # Register tools, resources, and prompts
-            self.tool_registry.register_server_tools(server_name, tools_response.tools)
-            self.resource_registry.register_server_resources(server_name, resources_response.resources)
-            self.prompt_registry.register_server_prompts(server_name, prompts_response.prompts)
+            # Get and register resources if available
+            try:
+                resources = await session.list_resources()
+                if resources and resources.resources:
+                    self.resource_registry.register_server_resources(server_name, resources.resources)
+            except Exception as e:
+                logger.debug(f"Server does not support resources: {e}")
 
-            tool_names = [tool.name for tool in tools_response.tools]
-            resource_names = [resource.name for resource in resources_response.resources]
-            prompt_names = [prompt.name for prompt in prompts_response.prompts]
+            # Get and register prompts if available
+            try:
+                prompts = await session.list_prompts()
+                if prompts and prompts.prompts:
+                    self.prompt_registry.register_server_prompts(server_name, prompts.prompts)
+            except Exception as e:
+                logger.debug(f"Server does not support prompts: {e}")
 
+            tool_names = [tool.name for tool in response.tools]
             duration = time.time() - start_time
             logger.info(
                 "Server connection successful",
                 extra={
                     "server_name": server_name,
                     "num_tools": len(tool_names),
-                    "num_resources": len(resource_names),
-                    "num_prompts": len(prompt_names),
                     "tool_names": tool_names,
-                    "resource_names": resource_names,
-                    "prompt_names": prompt_names,
                     "duration_ms": int(duration * 1000),
                 },
             )
@@ -281,6 +289,9 @@ class MCPToolProvider:
 
             # Clean up connection
             await self.connection_service.disconnect(server_name)
+
+            # Mark server as disconnected
+            self._connected_servers.pop(server_name, None)
 
             duration = time.time() - start_time
             logger.info(
@@ -411,6 +422,9 @@ class MCPToolProvider:
                         extra={"error": sanitize_log_message(str(e))},
                     )
 
+            # Clear connection tracking
+            self._connected_servers.clear()
+
             duration = time.time() - start_time
             logger.info(
                 "Provider cleanup completed",
@@ -448,8 +462,6 @@ class MCPToolProvider:
             extra={
                 "query": query,
                 "num_tools_available": len(self.tool_registry.all_tools),
-                "num_resources_available": len(self.resource_registry.all_resources),
-                "num_prompts_available": len(self.prompt_registry.all_prompts),
                 "num_servers": len(self.tool_registry.tools_by_server),
             },
         )
@@ -517,20 +529,14 @@ class MCPToolProvider:
             raise ValueError(f"Tool {tool_name} not found in any connected server")
 
         try:
-            # Process the query using all available tools, resources, and prompts
+            # Process the query using all available tools
             logger.debug(
                 "Sending query to LLM backend",
-                extra={
-                    "num_tools": len(self.tool_registry.all_tools),
-                    "num_resources": len(self.resource_registry.all_resources),
-                    "num_prompts": len(self.prompt_registry.all_prompts),
-                },
+                extra={"num_tools": len(self.tool_registry.all_tools)},
             )
             response = await self.llm_backend.process_query(
                 query=query,
                 tools=self.tool_registry.all_tools,
-                resources=self.resource_registry.all_resources,
-                prompts=self.prompt_registry.all_prompts,
                 execute_tool=execute_tool,
             )
             duration = time.time() - start_time
@@ -549,3 +555,113 @@ class MCPToolProvider:
                 },
             )
             raise
+
+    async def execute_tool(self, tool_name: str, tool_args: dict[str, Any]) -> CallToolResult:
+        """Execute a tool with the given arguments.
+
+        Args:
+            tool_name: Name of the tool to execute
+            tool_args: Arguments to pass to the tool
+
+        Returns:
+            CallToolResult: Result of the tool execution
+
+        Raises:
+            ValueError: If the tool is not found or no session exists
+            Exception: If the tool execution fails
+        """
+        start_time = time.time()
+        logger.info(
+            "Executing tool",
+            extra={
+                "tool_name": tool_name,
+                "args": sanitize_log_message(str(tool_args)),
+            },
+        )
+
+        # Find the server that provides this tool
+        server_name = self.tool_registry.find_tool_server(tool_name)
+        if not server_name:
+            logger.error("Tool not found", extra={"tool_name": tool_name})
+            raise ValueError("Tool not found")
+
+        # Get the session for this server
+        session = self.connection_service.get_session(server_name)
+        if not session:
+            logger.error(
+                "No session found for server",
+                extra={"server_name": server_name},
+            )
+            raise ValueError("No session found for server")
+
+        try:
+            # Execute the tool
+            result = await session.call_tool(tool_name, tool_args)
+            logger.info(
+                "Tool execution successful",
+                extra={
+                    "tool_name": tool_name,
+                    "duration": time.time() - start_time,
+                },
+            )
+            return result
+        except Exception as e:
+            logger.error(
+                "Tool execution failed",
+                extra={
+                    "tool_name": tool_name,
+                    "error": str(e),
+                },
+            )
+            raise
+
+    async def reconnect_server(self, server_name: str) -> bool:
+        """Reconnect to an MCP server and re-discover its capabilities.
+
+        Args:
+            server_name: Name of the server to reconnect to
+
+        Returns:
+            bool: True if reconnection was successful
+
+        Note:
+            This method first cleans up existing registrations for the server
+            then rediscovers its tools, resources, and prompts.
+        """
+        logger.info("Reconnecting to MCP server", extra={"server_name": server_name})
+
+        try:
+            # Clean up existing registrations
+            await self.cleanup_server(server_name)
+
+            # Reconnect and rediscover capabilities
+            await self.mcp_connect(server_name)
+
+            logger.info(
+                "Successfully reconnected to MCP server",
+                extra={"server_name": server_name},
+            )
+            return True
+        except Exception as e:
+            logger.error(
+                "Failed to reconnect to MCP server",
+                extra={
+                    "server_name": server_name,
+                    "error": sanitize_log_message(str(e)),
+                },
+            )
+            return False
+
+    def _process_query_impl(
+        self,
+        query: str,
+        context: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Implementation of query processing.
+
+        This method should be overridden by subclasses to implement
+        the actual query processing logic using the LLM backend.
+        """
+        raise NotImplementedError(
+            "Subclasses must implement _process_query_impl"
+        )
