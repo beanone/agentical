@@ -9,6 +9,8 @@ from typing import Any
 from google import genai
 from mcp.types import CallToolResult
 from mcp.types import Tool as MCPTool
+from mcp.types import Prompt as MCPPrompt
+from mcp.types import Resource as MCPResource
 
 from agentical.api.llm_backend import LLMBackend
 from agentical.utils.log_utils import sanitize_log_message
@@ -18,7 +20,7 @@ from .schema_adapter import SchemaAdapter
 logger = logging.getLogger(__name__)
 
 
-class GeminiBackend(LLMBackend):
+class GeminiBackend(LLMBackend[list[dict[str, Any]]]):
     """Gemini implementation for chat interactions."""
 
     DEFAULT_MODEL = "gemini-2.0-flash-001"
@@ -82,10 +84,51 @@ class GeminiBackend(LLMBackend):
             )
             raise
 
+    def convert_prompts(self, prompts: list[MCPPrompt]) -> list[dict[str, Any]]:
+        """Convert MCP prompts to Gemini format.
+
+        Args:
+            prompts: List of MCP prompts to convert
+
+        Returns:
+            List of prompts in Gemini format
+        """
+        return [
+            {
+                "name": prompt.name,
+                "description": prompt.description,
+                "content": prompt.content,
+            }
+            for prompt in prompts
+        ]
+
+    def convert_resources(self, resources: list[MCPResource]) -> list[dict[str, Any]]:
+        """Convert MCP resources to Gemini format.
+
+        Args:
+            resources: List of MCP resources to convert
+
+        Returns:
+            List of resources in Gemini format
+        """
+        return [
+            {
+                "name": resource.name,
+                "description": resource.description,
+                "uri": resource.uri,
+                "mimeType": resource.mimeType,
+                "size": resource.size,
+                "annotations": resource.annotations,
+            }
+            for resource in resources
+        ]
+
     async def process_query(
         self,
         query: str,
         tools: list[MCPTool],
+        resources: list[MCPResource],
+        prompts: list[MCPPrompt],
         execute_tool: Callable[[str, dict[str, Any]], CallToolResult],
         context: list[dict[str, Any]] | None = None,
     ) -> str:
@@ -94,6 +137,8 @@ class GeminiBackend(LLMBackend):
         Args:
             query: The user's query
             tools: List of available MCP tools
+            resources: List of available MCP resources
+            prompts: List of available MCP prompts
             execute_tool: Function to execute a tool call
             context: Optional conversation context
 
@@ -107,6 +152,8 @@ class GeminiBackend(LLMBackend):
                 extra={
                     "query": query,
                     "num_tools": len(tools),
+                    "num_resources": len(resources),
+                    "num_prompts": len(prompts),
                     "has_context": context is not None,
                 },
             )
@@ -181,6 +228,7 @@ class GeminiBackend(LLMBackend):
                                         "duration_ms": int(tool_duration * 1000),
                                     },
                                 )
+                                # Add error response to context
                                 contents.extend(
                                     self.schema_adapter.create_tool_response_content(
                                         function_call_part=part,
@@ -188,31 +236,30 @@ class GeminiBackend(LLMBackend):
                                         error=str(e),
                                     )
                                 )
-                        elif hasattr(part, "text"):
+                        else:
                             final_text.append(part.text)
 
-                # If no tool calls were made, return the final response
+                # If no tool calls, return the final response
                 if not has_tool_calls:
                     duration = time.time() - start_time
                     logger.info(
                         "Query completed without tool calls",
                         extra={"duration_ms": int(duration * 1000)},
                     )
-                    return (
-                        "\n".join(final_text) if final_text else "No response generated"
-                    )
+                    return " ".join(final_text) or "No response generated"
 
                 # Continue the loop to handle more tool calls
 
         except Exception as e:
             duration = time.time() - start_time
-            error_msg = sanitize_log_message(f"Error in Gemini conversation: {e!s}")
             logger.error(
-                error_msg,
-                extra={"error": str(e), "duration_ms": int(duration * 1000)},
-                exc_info=True,
+                "Error in Gemini conversation",
+                extra={
+                    "error": sanitize_log_message(str(e)),
+                    "duration_ms": int(duration * 1000),
+                },
             )
-            raise ValueError(error_msg)
+            raise ValueError(f"Error in Gemini conversation: {e!s}")
         finally:
             duration = time.time() - start_time
             logger.info(

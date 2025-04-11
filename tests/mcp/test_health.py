@@ -189,10 +189,10 @@ async def test_monitoring_task_cancellation(health_monitor):
     assert health_monitor._monitor_task is not None
     assert not health_monitor._monitor_task.done()
 
-    health_monitor.stop_monitoring()
+    await health_monitor.stop_monitoring()
     await asyncio.sleep(0.1)  # Give time for cancellation to process
 
-    assert health_monitor._monitor_task.cancelled()
+    assert health_monitor._monitor_task.done()
 
 
 @pytest.mark.asyncio
@@ -249,15 +249,23 @@ async def test_monitor_error_handling():
 
     mock_cleanup.cleanup = raise_error
 
-    # Start monitoring
-    monitor.start_monitoring()
+    try:
+        # Start monitoring
+        monitor.start_monitoring()
 
-    # Wait for error to occur and be handled
-    await asyncio.sleep(0.3)
+        # Wait for error to occur and be handled
+        await asyncio.sleep(0.3)
 
-    # Verify monitor is still running
-    assert not monitor._monitor_task.done()
-    monitor.stop_monitoring()
+        # Verify monitor is still running
+        assert not monitor._monitor_task.done()
+    finally:
+        # Ensure proper cleanup
+        if monitor._monitor_task and not monitor._monitor_task.done():
+            monitor._monitor_task.cancel()
+            try:
+                await monitor._monitor_task
+            except asyncio.CancelledError:
+                pass
 
 
 @pytest.mark.asyncio

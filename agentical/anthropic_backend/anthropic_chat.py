@@ -11,6 +11,8 @@ from typing import Any
 import anthropic
 from mcp.types import CallToolResult
 from mcp.types import Tool as MCPTool
+from mcp.types import Prompt as MCPPrompt
+from mcp.types import Resource as MCPResource
 
 from agentical.api.llm_backend import LLMBackend
 from agentical.utils.log_utils import sanitize_log_message
@@ -20,7 +22,7 @@ from .schema_adapter import SchemaAdapter
 logger = logging.getLogger(__name__)
 
 
-class AnthropicBackend(LLMBackend):
+class AnthropicBackend(LLMBackend[list[dict[str, Any]]]):
     """Anthropic implementation for chat interactions."""
 
     DEFAULT_MODEL = "claude-3-opus-20240229"
@@ -72,10 +74,51 @@ class AnthropicBackend(LLMBackend):
         """
         return self.schema_adapter.convert_mcp_tools_to_anthropic(tools)
 
+    def convert_prompts(self, prompts: list[MCPPrompt]) -> list[dict[str, Any]]:
+        """Convert MCP prompts to Anthropic format.
+
+        Args:
+            prompts: List of MCP prompts to convert
+
+        Returns:
+            List of prompts in Anthropic format
+        """
+        return [
+            {
+                "name": prompt.name,
+                "description": prompt.description,
+                "content": prompt.content,
+            }
+            for prompt in prompts
+        ]
+
+    def convert_resources(self, resources: list[MCPResource]) -> list[dict[str, Any]]:
+        """Convert MCP resources to Anthropic format.
+
+        Args:
+            resources: List of MCP resources to convert
+
+        Returns:
+            List of resources in Anthropic format
+        """
+        return [
+            {
+                "name": resource.name,
+                "description": resource.description,
+                "uri": resource.uri,
+                "mimeType": resource.mimeType,
+                "size": resource.size,
+                "annotations": resource.annotations,
+            }
+            for resource in resources
+        ]
+
     async def process_query(
         self,
         query: str,
         tools: list[MCPTool],
+        resources: list[MCPResource],
+        prompts: list[MCPPrompt],
         execute_tool: Callable[[str, dict[str, Any]], CallToolResult],
         context: list[dict[str, Any]] | None = None,
     ) -> str:
@@ -84,6 +127,8 @@ class AnthropicBackend(LLMBackend):
         Args:
             query: The user's query
             tools: List of available MCP tools
+            resources: List of available MCP resources
+            prompts: List of available MCP prompts
             execute_tool: Function to execute a tool call
             context: Optional conversation context
 
@@ -100,6 +145,8 @@ class AnthropicBackend(LLMBackend):
                 extra={
                     "query": query,
                     "num_tools": len(tools),
+                    "num_resources": len(resources),
+                    "num_prompts": len(prompts),
                     "has_context": context is not None,
                 },
             )

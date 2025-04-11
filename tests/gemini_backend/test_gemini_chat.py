@@ -149,13 +149,18 @@ async def test_process_query_without_tool_calls(
 
     # Configure mock client
     mock_client = Mock()
-    mock_client.models.generate_content = Mock(return_value=mock_response)
+    mock_client.models.generate_content = Mock()
+    mock_client.models.generate_content.return_value = mock_response
     mock_genai_client.return_value = mock_client
 
     # Execute test
     backend = GeminiBackend()
     response = await backend.process_query(
-        query="test query", tools=mock_mcp_tools, execute_tool=AsyncMock()
+        query="test query",
+        tools=mock_mcp_tools,
+        resources=[],
+        prompts=[],
+        execute_tool=AsyncMock()
     )
 
     assert response == "Test response"
@@ -181,9 +186,7 @@ async def test_process_query_with_tool_calls(
 
     # Configure mock client
     mock_client = Mock()
-    mock_client.models.generate_content = Mock(
-        side_effect=[mock_response1, mock_response2]
-    )
+    mock_client.models.generate_content = Mock(side_effect=[mock_response1, mock_response2])
     mock_genai_client.return_value = mock_client
 
     # Mock tool execution
@@ -196,7 +199,11 @@ async def test_process_query_with_tool_calls(
     # Execute test
     backend = GeminiBackend()
     response = await backend.process_query(
-        query="test query", tools=mock_mcp_tools, execute_tool=mock_execute_tool
+        query="test query",
+        tools=mock_mcp_tools,
+        resources=[],
+        prompts=[],
+        execute_tool=mock_execute_tool
     )
 
     assert response == "Final response"
@@ -223,9 +230,7 @@ async def test_process_query_with_tool_error(
 
     # Configure mock client
     mock_client = Mock()
-    mock_client.models.generate_content = Mock(
-        side_effect=[mock_response1, mock_response2]
-    )
+    mock_client.models.generate_content = Mock(side_effect=[mock_response1, mock_response2])
     mock_genai_client.return_value = mock_client
 
     # Mock tool execution to raise error
@@ -234,7 +239,11 @@ async def test_process_query_with_tool_error(
     # Execute test
     backend = GeminiBackend()
     response = await backend.process_query(
-        query="test query", tools=mock_mcp_tools, execute_tool=mock_execute_tool
+        query="test query",
+        tools=mock_mcp_tools,
+        resources=[],
+        prompts=[],
+        execute_tool=mock_execute_tool
     )
 
     assert response == "Error handled response"
@@ -257,7 +266,11 @@ async def test_process_query_with_no_candidates(
     # Execute test
     backend = GeminiBackend()
     response = await backend.process_query(
-        query="test query", tools=mock_mcp_tools, execute_tool=AsyncMock()
+        query="test query",
+        tools=mock_mcp_tools,
+        resources=[],
+        prompts=[],
+        execute_tool=AsyncMock()
     )
 
     assert response == "No response generated"
@@ -291,6 +304,8 @@ async def test_process_query_with_context(
     response = await backend.process_query(
         query="test query",
         tools=mock_mcp_tools,
+        resources=[],
+        prompts=[],
         execute_tool=AsyncMock(),
         context=context,
     )
@@ -332,5 +347,9 @@ async def test_process_query_with_api_error(
     backend = GeminiBackend()
     with pytest.raises(ValueError, match="Error in Gemini conversation"):
         await backend.process_query(
-            query="test query", tools=mock_mcp_tools, execute_tool=AsyncMock()
+            query="test query",
+            tools=mock_mcp_tools,
+            resources=[],
+            prompts=[],
+            execute_tool=AsyncMock()
         )
