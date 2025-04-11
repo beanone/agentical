@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from typing import Generic, TypeVar
 
-from mcp.types import Tool as MCPTool
+from mcp.types import Tool as MCPTool, Resource as MCPResource, Prompt as MCPPrompt
 
 # Type variables for LLM-specific context
 Context = TypeVar("Context")
@@ -14,7 +14,7 @@ class LLMBackend(ABC, Generic[Context]):
 
     This class defines the interface that all LLM implementations must follow.
     It is designed to be independent of specific LLM implementations, while
-    working directly with MCP tools.
+    working directly with MCP tools, resources, and prompts.
 
     Type Parameters:
         Context: The type used for conversation context in this LLM implementation
@@ -25,6 +25,8 @@ class LLMBackend(ABC, Generic[Context]):
         self,
         query: str,
         tools: list[MCPTool],
+        resources: list[MCPResource],
+        prompts: list[MCPPrompt],
         execute_tool: callable,
         context: Context | None = None,
     ) -> str:
@@ -33,6 +35,8 @@ class LLMBackend(ABC, Generic[Context]):
         Args:
             query: The user's input query
             tools: List of available MCP tools
+            resources: List of available MCP resources
+            prompts: List of available MCP prompts
             execute_tool: Callback function to execute a tool
             context: Optional conversation context/history
 
@@ -50,5 +54,29 @@ class LLMBackend(ABC, Generic[Context]):
 
         Returns:
             Tools in the format expected by this LLM implementation
+        """
+        pass
+
+    @abstractmethod
+    def convert_resources(self, resources: list[MCPResource]) -> list[MCPResource]:
+        """Convert MCP resources to the format expected by this LLM.
+
+        Args:
+            resources: List of MCP resources to convert
+
+        Returns:
+            Resources in the format expected by this LLM implementation
+        """
+        pass
+
+    @abstractmethod
+    def convert_prompts(self, prompts: list[MCPPrompt]) -> list[MCPPrompt]:
+        """Convert MCP prompts to the format expected by this LLM.
+
+        Args:
+            prompts: List of MCP prompts to convert
+
+        Returns:
+            Prompts in the format expected by this LLM implementation
         """
         pass

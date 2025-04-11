@@ -11,6 +11,8 @@ from typing import Any
 import anthropic
 from mcp.types import CallToolResult
 from mcp.types import Tool as MCPTool
+from mcp.types import Prompt as MCPPrompt
+from mcp.types import Resource as MCPResource
 
 from agentical.api.llm_backend import LLMBackend
 from agentical.utils.log_utils import sanitize_log_message
@@ -71,6 +73,45 @@ class AnthropicBackend(LLMBackend):
             List of tools in Anthropic format
         """
         return self.schema_adapter.convert_mcp_tools_to_anthropic(tools)
+
+    def convert_prompts(self, prompts: list[MCPPrompt]) -> list[dict[str, Any]]:
+        """Convert MCP prompts to Anthropic format.
+
+        Args:
+            prompts: List of MCP prompts to convert
+
+        Returns:
+            List of prompts in Anthropic format
+        """
+        return [
+            {
+                "name": prompt.name,
+                "description": prompt.description,
+                "content": prompt.content,
+            }
+            for prompt in prompts
+        ]
+
+    def convert_resources(self, resources: list[MCPResource]) -> list[dict[str, Any]]:
+        """Convert MCP resources to Anthropic format.
+
+        Args:
+            resources: List of MCP resources to convert
+
+        Returns:
+            List of resources in Anthropic format
+        """
+        return [
+            {
+                "name": resource.name,
+                "description": resource.description,
+                "uri": resource.uri,
+                "mimeType": resource.mimeType,
+                "size": resource.size,
+                "annotations": resource.annotations,
+            }
+            for resource in resources
+        ]
 
     async def process_query(
         self,

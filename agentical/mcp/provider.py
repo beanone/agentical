@@ -8,6 +8,8 @@ Key Features:
 - Automatic server connection management
 - Health monitoring with automatic reconnection
 - Tool discovery and management
+- Resource discovery and management
+- Prompt discovery and management
 - Query processing with LLM integration
 - Proper resource cleanup
 
@@ -40,6 +42,8 @@ Implementation Notes:
     - Uses connection manager for robust server connections
     - Implements health monitoring with automatic recovery
     - Maintains tool registry for efficient dispatch
+    - Maintains resource registry for resource management
+    - Maintains prompt registry for prompt management
     - Provides comprehensive error handling
     - Ensures proper resource cleanup
 """
@@ -56,13 +60,15 @@ from agentical.mcp.config import DictBasedMCPConfigProvider, MCPConfigProvider
 from agentical.mcp.connection import MCPConnectionService
 from agentical.mcp.schemas import ServerConfig
 from agentical.mcp.tool_registry import ToolRegistry
+from agentical.mcp.resource_registry import ResourceRegistry
+from agentical.mcp.prompt_registry import PromptRegistry
 from agentical.utils.log_utils import sanitize_log_message
 
 logger = logging.getLogger(__name__)
 
 
 class MCPToolProvider:
-    """Main facade for integrating LLMs with MCP tools."""
+    """Main facade for integrating LLMs with MCP tools, resources, and prompts."""
 
     def __init__(
         self,
@@ -102,6 +108,8 @@ class MCPToolProvider:
         self.available_servers: dict[str, ServerConfig] = {}
         self.llm_backend = llm_backend
         self.tool_registry = ToolRegistry()
+        self.resource_registry = ResourceRegistry()
+        self.prompt_registry = PromptRegistry()
 
         # Store configuration source
         self.config_provider = config_provider
@@ -154,21 +162,17 @@ class MCPToolProvider:
         start_time = time.time()
         logger.info("Connecting to server", extra={"server_name": server_name})
 
-        if not isinstance(server_name, str) or not server_name.strip():
-            logger.error("Invalid server name", extra={"server_name": server_name})
-            raise ValueError("server_name must be a non-empty string")
-
         if server_name not in self.available_servers:
             logger.error(
                 "Unknown server",
                 extra={
                     "server_name": server_name,
-                    "available_servers": self.list_available_servers(),
+                    "available_servers": list(self.available_servers.keys()),
                 },
             )
             raise ValueError(
                 f"Unknown server: {server_name}. "
-                f"Available servers: {self.list_available_servers()}"
+                f"Available servers: {list(self.available_servers.keys())}"
             )
 
         try:
@@ -177,20 +181,31 @@ class MCPToolProvider:
                 server_name, self.available_servers[server_name]
             )
 
-            # Initialize and get tools
-            response = await session.list_tools()
+            # Initialize and get tools, resources, and prompts
+            tools_response = await session.list_tools()
+            resources_response = await session.list_resources()
+            prompts_response = await session.list_prompts()
 
-            # Register tools
-            self.tool_registry.register_server_tools(server_name, response.tools)
+            # Register tools, resources, and prompts
+            self.tool_registry.register_server_tools(server_name, tools_response.tools)
+            self.resource_registry.register_server_resources(server_name, resources_response.resources)
+            self.prompt_registry.register_server_prompts(server_name, prompts_response.prompts)
 
-            tool_names = [tool.name for tool in response.tools]
+            tool_names = [tool.name for tool in tools_response.tools]
+            resource_names = [resource.name for resource in resources_response.resources]
+            prompt_names = [prompt.name for prompt in prompts_response.prompts]
+
             duration = time.time() - start_time
             logger.info(
                 "Server connection successful",
                 extra={
                     "server_name": server_name,
                     "num_tools": len(tool_names),
+                    "num_resources": len(resource_names),
+                    "num_prompts": len(prompt_names),
                     "tool_names": tool_names,
+                    "resource_names": resource_names,
+                    "prompt_names": prompt_names,
                     "duration_ms": int(duration * 1000),
                 },
             )
@@ -259,8 +274,10 @@ class MCPToolProvider:
         logger.info("Starting server cleanup", extra={"server_name": server_name})
 
         try:
-            # Remove server tools
+            # Remove server tools, resources, and prompts
             num_tools_removed = self.tool_registry.remove_server_tools(server_name)
+            num_resources_removed = self.resource_registry.remove_server_resources(server_name)
+            num_prompts_removed = self.prompt_registry.remove_server_prompts(server_name)
 
             # Clean up connection
             await self.connection_service.disconnect(server_name)
@@ -271,7 +288,11 @@ class MCPToolProvider:
                 extra={
                     "server_name": server_name,
                     "num_tools_removed": num_tools_removed,
+                    "num_resources_removed": num_resources_removed,
+                    "num_prompts_removed": num_prompts_removed,
                     "remaining_tools": len(self.tool_registry.all_tools),
+                    "remaining_resources": len(self.resource_registry.all_resources),
+                    "remaining_prompts": len(self.prompt_registry.all_prompts),
                     "duration_ms": int(duration * 1000),
                 },
             )
@@ -336,7 +357,7 @@ class MCPToolProvider:
         logger.info("Starting provider cleanup")
 
         try:
-            # Clear tool registry first
+            # Clear registries first
             if hasattr(self, "tool_registry"):
                 num_tools = len(self.tool_registry.all_tools)
                 num_servers = len(self.tool_registry.tools_by_server)
@@ -345,6 +366,30 @@ class MCPToolProvider:
                     "Tool registry cleared",
                     extra={
                         "num_tools": num_tools,
+                        "num_servers": num_servers,
+                    },
+                )
+
+            if hasattr(self, "resource_registry"):
+                num_resources = len(self.resource_registry.all_resources)
+                num_servers = len(self.resource_registry.resources_by_server)
+                self.resource_registry.clear()
+                logger.info(
+                    "Resource registry cleared",
+                    extra={
+                        "num_resources": num_resources,
+                        "num_servers": num_servers,
+                    },
+                )
+
+            if hasattr(self, "prompt_registry"):
+                num_prompts = len(self.prompt_registry.all_prompts)
+                num_servers = len(self.prompt_registry.prompts_by_server)
+                self.prompt_registry.clear()
+                logger.info(
+                    "Prompt registry cleared",
+                    extra={
+                        "num_prompts": num_prompts,
                         "num_servers": num_servers,
                     },
                 )
@@ -403,6 +448,8 @@ class MCPToolProvider:
             extra={
                 "query": query,
                 "num_tools_available": len(self.tool_registry.all_tools),
+                "num_resources_available": len(self.resource_registry.all_resources),
+                "num_prompts_available": len(self.prompt_registry.all_prompts),
                 "num_servers": len(self.tool_registry.tools_by_server),
             },
         )
@@ -470,14 +517,20 @@ class MCPToolProvider:
             raise ValueError(f"Tool {tool_name} not found in any connected server")
 
         try:
-            # Process the query using all available tools
+            # Process the query using all available tools, resources, and prompts
             logger.debug(
                 "Sending query to LLM backend",
-                extra={"num_tools": len(self.tool_registry.all_tools)},
+                extra={
+                    "num_tools": len(self.tool_registry.all_tools),
+                    "num_resources": len(self.resource_registry.all_resources),
+                    "num_prompts": len(self.prompt_registry.all_prompts),
+                },
             )
             response = await self.llm_backend.process_query(
                 query=query,
                 tools=self.tool_registry.all_tools,
+                resources=self.resource_registry.all_resources,
+                prompts=self.prompt_registry.all_prompts,
                 execute_tool=execute_tool,
             )
             duration = time.time() - start_time

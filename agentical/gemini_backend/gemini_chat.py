@@ -9,6 +9,8 @@ from typing import Any
 from google import genai
 from mcp.types import CallToolResult
 from mcp.types import Tool as MCPTool
+from mcp.types import Prompt as MCPPrompt
+from mcp.types import Resource as MCPResource
 
 from agentical.api.llm_backend import LLMBackend
 from agentical.utils.log_utils import sanitize_log_message
@@ -81,6 +83,45 @@ class GeminiBackend(LLMBackend):
                 extra={"error": str(e), "duration_ms": int(duration * 1000)},
             )
             raise
+
+    def convert_prompts(self, prompts: list[MCPPrompt]) -> list[dict[str, Any]]:
+        """Convert MCP prompts to Gemini format.
+
+        Args:
+            prompts: List of MCP prompts to convert
+
+        Returns:
+            List of prompts in Gemini format
+        """
+        return [
+            {
+                "name": prompt.name,
+                "description": prompt.description,
+                "content": prompt.content,
+            }
+            for prompt in prompts
+        ]
+
+    def convert_resources(self, resources: list[MCPResource]) -> list[dict[str, Any]]:
+        """Convert MCP resources to Gemini format.
+
+        Args:
+            resources: List of MCP resources to convert
+
+        Returns:
+            List of resources in Gemini format
+        """
+        return [
+            {
+                "name": resource.name,
+                "description": resource.description,
+                "uri": resource.uri,
+                "mimeType": resource.mimeType,
+                "size": resource.size,
+                "annotations": resource.annotations,
+            }
+            for resource in resources
+        ]
 
     async def process_query(
         self,

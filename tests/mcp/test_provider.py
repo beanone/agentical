@@ -34,6 +34,12 @@ class MockClientSession:
     async def list_tools(self):
         return Mock(tools=self.tools)
 
+    async def list_resources(self):
+        return Mock(resources=[])
+
+    async def list_prompts(self):
+        return Mock(prompts=[])
+
     async def call_tool(self, tool_name, tool_args):
         return CallToolResult(
             result="success",
