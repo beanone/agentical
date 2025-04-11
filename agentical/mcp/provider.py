@@ -297,37 +297,28 @@ class MCPToolProvider:
         return results
 
     async def cleanup_server(self, server_name: str) -> None:
-        """Clean up a specific server's resources."""
+        """Clean up resources for a specific server."""
         start_time = time.time()
-        logger.info("Starting server cleanup", extra={"server_name": server_name})
+        logger.info("Cleaning up server", extra={"server_name": server_name})
 
         try:
-            # Remove server tools, resources, and prompts
-            num_tools_removed = self.tool_registry.remove_server_tools(server_name)
-            num_resources_removed = self.resource_registry.remove_server_resources(server_name)
-            num_prompts_removed = self.prompt_registry.remove_server_prompts(server_name)
-
             # Clean up connection
-            await self.connection_service.disconnect(server_name)
+            await self.connection_service.cleanup(server_name)
 
-            # Mark server as disconnected
-            self._connected_servers.pop(server_name, None)
+            # Remove tools
+            self.tool_registry.remove_server_tools(server_name)
+
+            # Remove resources
+            self.resource_registry.remove_server_resources(server_name)
+
+            # Remove prompts
+            self.prompt_registry.remove_server_prompts(server_name)
 
             duration = time.time() - start_time
             logger.info(
-                "Server cleanup completed",
-                extra={
-                    "server_name": server_name,
-                    "num_tools_removed": num_tools_removed,
-                    "num_resources_removed": num_resources_removed,
-                    "num_prompts_removed": num_prompts_removed,
-                    "remaining_tools": len(self.tool_registry.all_tools),
-                    "remaining_resources": len(self.resource_registry.all_resources),
-                    "remaining_prompts": len(self.prompt_registry.all_prompts),
-                    "duration_ms": int(duration * 1000),
-                },
+                "Server cleanup successful",
+                extra={"server_name": server_name, "duration_ms": int(duration * 1000)},
             )
-
         except Exception as e:
             duration = time.time() - start_time
             logger.error(
@@ -338,39 +329,148 @@ class MCPToolProvider:
                     "duration_ms": int(duration * 1000),
                 },
             )
+            raise  # Re-raise the exception after logging
+
+    async def cleanup(self, server_name: str) -> None:
+        """Clean up all resources for a specific server."""
+        start_time = time.time()
+        logger.info("Cleaning up server", extra={"server_name": server_name})
+
+        try:
+            # Clean up connection
+            await self.connection_service.cleanup(server_name)
+
+            # Remove tools
+            self.tool_registry.remove_server_tools(server_name)
+
+            # Remove resources
+            self.resource_registry.remove_server_resources(server_name)
+
+            # Remove prompts
+            self.prompt_registry.remove_server_prompts(server_name)
+
+            duration = time.time() - start_time
+            logger.info(
+                "Server cleanup successful",
+                extra={"server_name": server_name, "duration_ms": int(duration * 1000)},
+            )
+        except Exception as e:
+            duration = time.time() - start_time
+            logger.error(
+                "Server cleanup failed",
+                extra={
+                    "server_name": server_name,
+                    "error": sanitize_log_message(str(e)),
+                    "duration_ms": int(duration * 1000),
+                },
+            )
+            raise  # Re-raise the exception after logging
 
     async def reconnect(self, server_name: str) -> bool:
-        """Reconnect to a server and re-register its tools.
+        """Attempt to reconnect to a server."""
+        start_time = time.time()
+        logger.info("Reconnecting to server", extra={"server_name": server_name})
 
-        Args:
-            server_name: Name of the server to reconnect to
-
-        Returns:
-            bool: True if reconnection was successful, False otherwise
-        """
         try:
-            if server_name not in self.available_servers:
-                logger.warning(f"Cannot reconnect to unknown server: {server_name}")
-                return False
-
-            # First clean up any existing tools for this server
+            # Clean up existing connection
             await self.cleanup_server(server_name)
 
-            # Get the server config
-            config = self.available_servers[server_name]
+            # Try to reconnect
+            await self.mcp_connect(server_name)
 
-            # Attempt to connect using the connection service
-            session = await self.connection_service.connect(server_name, config)
-
-            # Get and register tools
-            response = await session.list_tools()
-            self.tool_registry.register_server_tools(server_name, response.tools)
-
+            duration = time.time() - start_time
+            logger.info(
+                "Server reconnection successful",
+                extra={"server_name": server_name, "duration_ms": int(duration * 1000)},
+            )
             return True
         except Exception as e:
-            logger.error(f"Failed to reconnect to server {server_name}: {e!s}")
-            await self.cleanup_server(server_name)
+            duration = time.time() - start_time
+            logger.error(
+                "Server reconnection failed",
+                extra={
+                    "server_name": server_name,
+                    "error": sanitize_log_message(str(e)),
+                    "duration_ms": int(duration * 1000),
+                },
+            )
             return False
+
+    async def get_resource(self, resource_name: str) -> MCPResource:
+        """Get a resource by name."""
+        start_time = time.time()
+        logger.info("Getting resource", extra={"resource_name": resource_name})
+
+        try:
+            # Find the server that has this resource
+            server_name = self.resource_registry.find_resource_server(resource_name)
+            if not server_name:
+                raise ValueError(f"Resource not found: {resource_name}")
+
+            # Get the resource from the registry
+            resource = self.resource_registry.get_resource(resource_name)
+            if not resource:
+                raise ValueError(f"Resource not found: {resource_name}")
+
+            duration = time.time() - start_time
+            logger.info(
+                "Resource retrieved successfully",
+                extra={
+                    "resource_name": resource_name,
+                    "server_name": server_name,
+                    "duration_ms": int(duration * 1000),
+                },
+            )
+            return resource
+        except Exception as e:
+            duration = time.time() - start_time
+            logger.error(
+                "Failed to get resource",
+                extra={
+                    "resource_name": resource_name,
+                    "error": sanitize_log_message(str(e)),
+                    "duration_ms": int(duration * 1000),
+                },
+            )
+            raise
+
+    async def get_prompt(self, prompt_name: str) -> MCPPrompt:
+        """Get a prompt by name."""
+        start_time = time.time()
+        logger.info("Getting prompt", extra={"prompt_name": prompt_name})
+
+        try:
+            # Find the server that has this prompt
+            server_name = self.prompt_registry.find_prompt_server(prompt_name)
+            if not server_name:
+                raise ValueError(f"Prompt not found: {prompt_name}")
+
+            # Get the prompt from the registry
+            prompt = self.prompt_registry.get_prompt(prompt_name)
+            if not prompt:
+                raise ValueError(f"Prompt not found: {prompt_name}")
+
+            duration = time.time() - start_time
+            logger.info(
+                "Prompt retrieved successfully",
+                extra={
+                    "prompt_name": prompt_name,
+                    "server_name": server_name,
+                    "duration_ms": int(duration * 1000),
+                },
+            )
+            return prompt
+        except Exception as e:
+            duration = time.time() - start_time
+            logger.error(
+                "Failed to get prompt",
+                extra={
+                    "prompt_name": prompt_name,
+                    "error": sanitize_log_message(str(e)),
+                    "duration_ms": int(duration * 1000),
+                },
+            )
+            raise
 
     async def cleanup_all(self) -> None:
         """Clean up all provider resources.
@@ -461,18 +561,6 @@ class MCPToolProvider:
                 },
             )
             raise
-
-    async def cleanup(self, server_name: str | None = None) -> None:
-        """Clean up server resources.
-
-        Args:
-            server_name: Optional server name to clean up. If None, cleans up all
-                resources.
-        """
-        if server_name is not None:
-            await self.cleanup_server(server_name)
-        else:
-            await self.cleanup_all()
 
     async def process_query(self, query: str) -> str:
         """Process a user query using the configured LLM backend."""

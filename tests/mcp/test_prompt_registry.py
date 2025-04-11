@@ -2,6 +2,7 @@
 
 import pytest
 from mcp.types import Prompt as MCPPrompt, PromptArgument
+from pydantic import ValidationError
 
 from agentical.mcp.prompt_registry import PromptRegistry
 
@@ -131,3 +132,128 @@ async def test_get_server_prompts(prompt_registry, sample_prompts):
     # Test with nonexistent server
     prompts = prompt_registry.get_server_prompts("nonexistent")
     assert prompts == []
+
+
+async def test_validate_prompt_invalid_type(prompt_registry):
+    """Test validation of invalid prompt type."""
+    with pytest.raises(TypeError, match="Prompt must be an MCPPrompt"):
+        prompt_registry._validate_prompt("not_a_prompt")
+
+
+async def test_validate_prompt_empty_name(prompt_registry):
+    """Test validation of prompt with empty name."""
+    with pytest.raises(ValueError, match="Prompt name cannot be empty"):
+        prompt_registry._validate_prompt(MCPPrompt(name="", description="test"))
+
+
+async def test_validate_prompts_invalid_list_type(prompt_registry):
+    """Test validation of invalid prompts list type."""
+    with pytest.raises(TypeError, match="Prompts must be a list"):
+        prompt_registry._validate_prompts("not_a_list", "server1")
+
+
+async def test_validate_prompts_duplicate_names(prompt_registry):
+    """Test validation of prompts with duplicate names."""
+    duplicate_prompts = [
+        MCPPrompt(name="duplicate", description="test1"),
+        MCPPrompt(name="duplicate", description="test2"),
+    ]
+    with pytest.raises(ValueError, match="Duplicate prompt names found"):
+        prompt_registry._validate_prompts(duplicate_prompts, "server1")
+
+
+async def test_register_server_prompts_error_handling(prompt_registry):
+    """Test error handling during prompt registration."""
+    # Test with invalid prompts list
+    with pytest.raises(TypeError):
+        prompt_registry.register_server_prompts("server1", "not_a_list")
+
+    # Test with duplicate prompt names
+    duplicate_prompts = [
+        MCPPrompt(name="duplicate", description="test1"),
+        MCPPrompt(name="duplicate", description="test2"),
+    ]
+    with pytest.raises(ValueError):
+        prompt_registry.register_server_prompts("server1", duplicate_prompts)
+
+
+async def test_remove_server_prompts_error_handling(prompt_registry, sample_prompts):
+    """Test error handling during prompt removal."""
+    # Register prompts first
+    prompt_registry.register_server_prompts("server1", sample_prompts)
+
+    # Mock an error during removal
+    original_prompts = prompt_registry.prompts_by_server["server1"]
+    prompt_registry.prompts_by_server["server1"] = None  # This will cause an error
+
+    with pytest.raises(Exception):
+        prompt_registry.remove_server_prompts("server1")
+
+    # Restore the prompts to avoid affecting other tests
+    prompt_registry.prompts_by_server["server1"] = original_prompts
+
+
+async def test_find_prompt_server_invalid_name(prompt_registry):
+    """Test finding prompt server with invalid prompt name."""
+    # Test with empty prompt name
+    assert prompt_registry.find_prompt_server("") is None
+
+    # Test with non-string prompt name
+    assert prompt_registry.find_prompt_server(123) is None
+
+
+async def test_clear_error_handling(prompt_registry, sample_prompts):
+    """Test error handling during registry clearing."""
+    # Register prompts first
+    prompt_registry.register_server_prompts("server1", sample_prompts)
+
+    # Mock an error during clearing
+    original_prompts = prompt_registry.all_prompts
+    prompt_registry.all_prompts = None  # This will cause an error
+
+    with pytest.raises(Exception):
+        prompt_registry.clear()
+
+    # Restore the prompts to avoid affecting other tests
+    prompt_registry.all_prompts = original_prompts
+
+
+async def test_register_server_prompts_empty_list(prompt_registry):
+    """Test registering an empty list of prompts."""
+    prompt_registry.register_server_prompts("server1", [])
+    assert len(prompt_registry.all_prompts) == 0
+    assert len(prompt_registry.prompts_by_server["server1"]) == 0
+
+
+async def test_register_server_prompts_multiple_servers(prompt_registry, sample_prompts):
+    """Test registering prompts for multiple servers."""
+    # Register prompts for first server
+    prompt_registry.register_server_prompts("server1", sample_prompts)
+
+    # Register different prompts for second server
+    other_prompts = [MCPPrompt(name="prompt3", description="Test prompt 3")]
+    prompt_registry.register_server_prompts("server2", other_prompts)
+
+    # Verify both servers' prompts are registered correctly
+    assert len(prompt_registry.all_prompts) == 3
+    assert len(prompt_registry.prompts_by_server["server1"]) == 2
+    assert len(prompt_registry.prompts_by_server["server2"]) == 1
+    assert prompt_registry.prompts_by_server["server1"] == sample_prompts
+    assert prompt_registry.prompts_by_server["server2"] == other_prompts
+
+
+async def test_remove_server_prompts_verify_state(prompt_registry, sample_prompts):
+    """Test that removing server prompts maintains correct state."""
+    # Register prompts for multiple servers
+    prompt_registry.register_server_prompts("server1", sample_prompts)
+    prompt_registry.register_server_prompts("server2", sample_prompts)
+
+    # Remove prompts for one server
+    num_removed = prompt_registry.remove_server_prompts("server1")
+
+    # Verify state
+    assert num_removed == 2
+    assert "server1" not in prompt_registry.prompts_by_server
+    assert "server1" not in prompt_registry._prompt_names
+    assert len(prompt_registry.all_prompts) == 2
+    assert len(prompt_registry.prompts_by_server["server2"]) == 2
