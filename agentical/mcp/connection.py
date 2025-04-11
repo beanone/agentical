@@ -446,5 +446,5 @@ class MCPConnectionService(ServerReconnector, ServerCleanupHandler):
 
     async def cleanup_all(self) -> None:
         """Clean up all connections and stop health monitoring."""
-        self._health_monitor.stop_monitoring()
+        await self._health_monitor.stop_monitoring()
         await self._connection_manager.cleanup_all()
