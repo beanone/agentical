@@ -195,6 +195,16 @@ class MCPToolProvider:
                 resources = await session.list_resources()
                 if resources and resources.resources:
                     self.resource_registry.register_server_resources(server_name, resources.resources)
+                    # Verify resources were registered
+                    registered_resources = self.resource_registry.get_server_resources(server_name)
+                    logger.debug(
+                        "Server resources registered",
+                        extra={
+                            "server_name": server_name,
+                            "num_resources": len(registered_resources),
+                            "resource_names": [r.name for r in registered_resources],
+                        },
+                    )
             except Exception as e:
                 logger.debug(f"Server does not support resources: {e}")
 
@@ -203,6 +213,16 @@ class MCPToolProvider:
                 prompts = await session.list_prompts()
                 if prompts and prompts.prompts:
                     self.prompt_registry.register_server_prompts(server_name, prompts.prompts)
+                    # Verify prompts were registered
+                    registered_prompts = self.prompt_registry.get_server_prompts(server_name)
+                    logger.debug(
+                        "Server prompts registered",
+                        extra={
+                            "server_name": server_name,
+                            "num_prompts": len(registered_prompts),
+                            "prompt_names": [p.name for p in registered_prompts],
+                        },
+                    )
             except Exception as e:
                 logger.debug(f"Server does not support prompts: {e}")
 
@@ -462,6 +482,8 @@ class MCPToolProvider:
             extra={
                 "query": query,
                 "num_tools_available": len(self.tool_registry.all_tools),
+                "num_resources_available": len(self.resource_registry.all_resources),
+                "num_prompts_available": len(self.prompt_registry.all_prompts),
                 "num_servers": len(self.tool_registry.tools_by_server),
             },
         )
@@ -484,60 +506,174 @@ class MCPToolProvider:
 
             # Find which server has this tool
             server_name = self.tool_registry.find_tool_server(tool_name)
-            if server_name:
-                logger.debug(
-                    "Found tool in server",
-                    extra={"tool_name": tool_name, "server_name": server_name},
+            if not server_name:
+                tool_duration = time.time() - tool_start
+                logger.error(
+                    "Tool not found",
+                    extra={
+                        "tool_name": tool_name,
+                        "duration_ms": int(tool_duration * 1000),
+                    },
                 )
-                try:
-                    session = self.connection_service.get_session(server_name)
-                    if not session:
-                        raise ValueError(f"No active session for server {server_name}")
+                raise ValueError(f"Tool {tool_name} not found in any connected server")
 
-                    result = await session.call_tool(tool_name, tool_args)
-                    tool_duration = time.time() - tool_start
-                    logger.debug(
-                        "Tool execution successful",
-                        extra={
-                            "tool_name": tool_name,
-                            "server_name": server_name,
-                            "duration_ms": int(tool_duration * 1000),
-                        },
-                    )
-                    return result
-                except Exception as e:
-                    tool_duration = time.time() - tool_start
-                    logger.error(
-                        "Tool execution failed",
-                        extra={
-                            "tool_name": tool_name,
-                            "server_name": server_name,
-                            "error": sanitize_log_message(str(e)),
-                            "duration_ms": int(tool_duration * 1000),
-                        },
-                    )
-                    raise
-
-            tool_duration = time.time() - tool_start
-            logger.error(
-                "Tool not found",
-                extra={
-                    "tool_name": tool_name,
-                    "duration_ms": int(tool_duration * 1000),
-                },
+            logger.debug(
+                "Found tool in server",
+                extra={"tool_name": tool_name, "server_name": server_name},
             )
-            raise ValueError(f"Tool {tool_name} not found in any connected server")
+            try:
+                session = self.connection_service.get_session(server_name)
+                if not session:
+                    raise ValueError(f"No active session for server {server_name}")
+
+                result = await session.call_tool(tool_name, tool_args)
+                tool_duration = time.time() - tool_start
+                logger.debug(
+                    "Tool execution successful",
+                    extra={
+                        "tool_name": tool_name,
+                        "server_name": server_name,
+                        "duration_ms": int(tool_duration * 1000),
+                    },
+                )
+                return result
+            except Exception as e:
+                tool_duration = time.time() - tool_start
+                logger.error(
+                    "Tool execution failed",
+                    extra={
+                        "tool_name": tool_name,
+                        "server_name": server_name,
+                        "error": sanitize_log_message(str(e)),
+                        "duration_ms": int(tool_duration * 1000),
+                    },
+                )
+                raise
+
+        # Get resource directly with MCP types
+        async def get_resource(resource_name: str) -> MCPResource:
+            resource_start = time.time()
+            logger.debug(
+                "Getting resource", extra={"resource_name": resource_name}
+            )
+
+            # Find which server has this resource
+            server_name = self.resource_registry.find_resource_server(resource_name)
+            if not server_name:
+                resource_duration = time.time() - resource_start
+                logger.error(
+                    "Resource not found",
+                    extra={
+                        "resource_name": resource_name,
+                        "duration_ms": int(resource_duration * 1000),
+                    },
+                )
+                raise ValueError(f"Resource {resource_name} not found in any connected server")
+
+            logger.debug(
+                "Found resource in server",
+                extra={"resource_name": resource_name, "server_name": server_name},
+            )
+            try:
+                session = self.connection_service.get_session(server_name)
+                if not session:
+                    raise ValueError(f"No active session for server {server_name}")
+
+                resource = await session.get_resource(resource_name)
+                resource_duration = time.time() - resource_start
+                logger.debug(
+                    "Resource retrieval successful",
+                    extra={
+                        "resource_name": resource_name,
+                        "server_name": server_name,
+                        "duration_ms": int(resource_duration * 1000),
+                    },
+                )
+                return resource
+            except Exception as e:
+                resource_duration = time.time() - resource_start
+                logger.error(
+                    "Resource retrieval failed",
+                    extra={
+                        "resource_name": resource_name,
+                        "server_name": server_name,
+                        "error": sanitize_log_message(str(e)),
+                        "duration_ms": int(resource_duration * 1000),
+                    },
+                )
+                raise
+
+        # Get prompt directly with MCP types
+        async def get_prompt(prompt_name: str) -> MCPPrompt:
+            prompt_start = time.time()
+            logger.debug(
+                "Getting prompt", extra={"prompt_name": prompt_name}
+            )
+
+            # Find which server has this prompt
+            server_name = self.prompt_registry.find_prompt_server(prompt_name)
+            if not server_name:
+                prompt_duration = time.time() - prompt_start
+                logger.error(
+                    "Prompt not found",
+                    extra={
+                        "prompt_name": prompt_name,
+                        "duration_ms": int(prompt_duration * 1000),
+                    },
+                )
+                raise ValueError(f"Prompt {prompt_name} not found in any connected server")
+
+            logger.debug(
+                "Found prompt in server",
+                extra={"prompt_name": prompt_name, "server_name": server_name},
+            )
+            try:
+                session = self.connection_service.get_session(server_name)
+                if not session:
+                    raise ValueError(f"No active session for server {server_name}")
+
+                prompt = await session.get_prompt(prompt_name)
+                prompt_duration = time.time() - prompt_start
+                logger.debug(
+                    "Prompt retrieval successful",
+                    extra={
+                        "prompt_name": prompt_name,
+                        "server_name": server_name,
+                        "duration_ms": int(prompt_duration * 1000),
+                    },
+                )
+                return prompt
+            except Exception as e:
+                prompt_duration = time.time() - prompt_start
+                logger.error(
+                    "Prompt retrieval failed",
+                    extra={
+                        "prompt_name": prompt_name,
+                        "server_name": server_name,
+                        "error": sanitize_log_message(str(e)),
+                        "duration_ms": int(prompt_duration * 1000),
+                    },
+                )
+                raise
 
         try:
-            # Process the query using all available tools
+            # Process the query using all available tools, resources, and prompts
             logger.debug(
                 "Sending query to LLM backend",
-                extra={"num_tools": len(self.tool_registry.all_tools)},
+                extra={
+                    "num_tools": len(self.tool_registry.all_tools),
+                    "num_resources": len(self.resource_registry.all_resources),
+                    "num_prompts": len(self.prompt_registry.all_prompts),
+                },
             )
             response = await self.llm_backend.process_query(
                 query=query,
                 tools=self.tool_registry.all_tools,
+                resources=self.resource_registry.all_resources,
+                prompts=self.prompt_registry.all_prompts,
                 execute_tool=execute_tool,
+                get_resource=get_resource,
+                get_prompt=get_prompt,
             )
             duration = time.time() - start_time
             logger.info(
@@ -637,14 +773,25 @@ class MCPToolProvider:
             # Reconnect and rediscover capabilities
             await self.mcp_connect(server_name)
 
+            # Verify reconnection by checking tools, resources, and prompts
+            tools = self.tool_registry.get_server_tools(server_name)
+            resources = self.resource_registry.get_server_resources(server_name)
+            prompts = self.prompt_registry.get_server_prompts(server_name)
+
             logger.info(
-                "Successfully reconnected to MCP server",
-                extra={"server_name": server_name},
+                "Successfully reconnected to server",
+                extra={
+                    "server_name": server_name,
+                    "num_tools": len(tools),
+                    "num_resources": len(resources),
+                    "num_prompts": len(prompts),
+                },
             )
             return True
+
         except Exception as e:
             logger.error(
-                "Failed to reconnect to MCP server",
+                "Failed to reconnect to server",
                 extra={
                     "server_name": server_name,
                     "error": sanitize_log_message(str(e)),
