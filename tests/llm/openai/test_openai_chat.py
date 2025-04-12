@@ -365,17 +365,6 @@ async def test_process_query_handles_invalid_tool_args(
     assert mock_client.chat.completions.create.call_count == 2
 
 
-def test_convert_tools(mock_env_vars, mock_mcp_tools):
-    """Test the public convert_tools method."""
-    backend = OpenAIBackend()
-    formatted = backend.convert_tools(mock_mcp_tools)
-
-    assert len(formatted) == 2
-    assert all(tool["type"] == "function" for tool in formatted)
-    assert formatted[0]["function"]["name"] == "tool1"
-    assert formatted[1]["function"]["name"] == "tool2"
-
-
 def test_init_with_custom_model(mock_env_vars):
     """Test initialization with custom model from environment."""
     os.environ["OPENAI_MODEL"] = "custom-model"

@@ -103,7 +103,9 @@ class SchemaAdapter:
 
     @staticmethod
     def create_tool_response_message(
-        tool_call_id: str, result: CallToolResult | str | None = None, error: str | None = None
+        tool_call_id: str,
+        result: CallToolResult | str | None = None,
+        error: str | None = None,
     ) -> dict[str, str]:
         """Create a tool response message in OpenAI format."""
         content = str(error if error else result)

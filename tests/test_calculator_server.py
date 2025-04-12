@@ -5,7 +5,12 @@ This module provides comprehensive test coverage for the calculator server imple
 
 import ast
 import pytest
-from server.calculator_server import SafeCalculator, CalculatorError, sanitize_expression, calculate
+from server.calculator_server import (
+    SafeCalculator,
+    CalculatorError,
+    sanitize_expression,
+    calculate,
+)
 
 
 class TestSanitizeExpression:
@@ -31,11 +36,17 @@ class TestSanitizeExpression:
 
     def test_invalid_characters(self):
         """Test handling of invalid characters."""
-        with pytest.raises(CalculatorError, match="Expression contains invalid characters"):
+        with pytest.raises(
+            CalculatorError, match="Expression contains invalid characters"
+        ):
             sanitize_expression("2 + a")
-        with pytest.raises(CalculatorError, match="Expression contains invalid characters"):
+        with pytest.raises(
+            CalculatorError, match="Expression contains invalid characters"
+        ):
             sanitize_expression("sin(x)")
-        with pytest.raises(CalculatorError, match="Expression contains invalid characters"):
+        with pytest.raises(
+            CalculatorError, match="Expression contains invalid characters"
+        ):
             sanitize_expression("2 @ 3")
 
 
@@ -57,7 +68,7 @@ class TestSafeCalculator:
             ("2 ** 3", 8.0),
         ]
         for expr, expected in cases:
-            tree = ast.parse(expr, mode='eval')
+            tree = ast.parse(expr, mode="eval")
             result = calculator.visit(tree.body)
             assert result == expected
 
@@ -71,7 +82,7 @@ class TestSafeCalculator:
             ("2 + 2 + 2", 6.0),  # Multiple additions
         ]
         for expr, expected in cases:
-            tree = ast.parse(expr, mode='eval')
+            tree = ast.parse(expr, mode="eval")
             result = calculator.visit(tree.body)
             assert result == expected
 
@@ -84,37 +95,37 @@ class TestSafeCalculator:
             ("+2 - 3", -1.0),
         ]
         for expr, expected in cases:
-            tree = ast.parse(expr, mode='eval')
+            tree = ast.parse(expr, mode="eval")
             result = calculator.visit(tree.body)
             assert result == expected
 
     def test_division_by_zero(self, calculator):
         """Test division by zero error."""
         with pytest.raises(CalculatorError, match="Division by zero is not allowed"):
-            tree = ast.parse("1 / 0", mode='eval')
+            tree = ast.parse("1 / 0", mode="eval")
             calculator.visit(tree.body)
 
     def test_invalid_operations(self, calculator):
         """Test invalid operations and expressions."""
         # Test function calls
         with pytest.raises(CalculatorError, match="Function calls are not allowed"):
-            tree = ast.parse("sin(30)", mode='eval')
+            tree = ast.parse("sin(30)", mode="eval")
             calculator.visit(tree.body)
 
         # Test variables
         with pytest.raises(CalculatorError, match="Variables are not allowed"):
-            tree = ast.parse("x + 1", mode='eval')
+            tree = ast.parse("x + 1", mode="eval")
             calculator.visit(tree.body)
 
         # Test unsupported operators
         with pytest.raises(CalculatorError, match="Unsupported expression type"):
-            tree = ast.parse("1 if True else 0", mode='eval')
+            tree = ast.parse("1 if True else 0", mode="eval")
             calculator.visit(tree.body)
 
     def test_constant_validation(self, calculator):
         """Test constant validation."""
         # Test valid numeric constants
-        tree = ast.parse("42", mode='eval')
+        tree = ast.parse("42", mode="eval")
         assert calculator.visit(tree.body) == 42.0
 
         # Test invalid constant type
@@ -126,9 +137,7 @@ class TestSafeCalculator:
         """Test unsupported binary operator."""
         # Create a BinOp node with an unsupported operator
         node = ast.BinOp(
-            left=ast.Constant(value=1),
-            right=ast.Constant(value=2),
-            op=ast.BitOr()
+            left=ast.Constant(value=1), right=ast.Constant(value=2), op=ast.BitOr()
         )
 
         with pytest.raises(CalculatorError, match="Unsupported operator: BitOr"):
@@ -137,10 +146,7 @@ class TestSafeCalculator:
     def test_unsupported_unary_operator(self, calculator):
         """Test unsupported unary operator."""
         # Create a UnaryOp node with an unsupported operator
-        node = ast.UnaryOp(
-            operand=ast.Constant(value=1),
-            op=ast.Invert()
-        )
+        node = ast.UnaryOp(operand=ast.Constant(value=1), op=ast.Invert())
 
         with pytest.raises(CalculatorError, match="Unsupported unary operator: Invert"):
             calculator.visit(node)
@@ -163,10 +169,10 @@ class TestCalculateFunction:
 
         for expr, expected in test_cases:
             result = await calculate(expr)
-            assert result['success'] is True
-            assert result['result'] == expected
-            assert result['error'] is None
-            assert result['expression'] == expr.replace(' ', '')
+            assert result["success"] is True
+            assert result["result"] == expected
+            assert result["error"] is None
+            assert result["expression"] == expr.replace(" ", "")
 
     async def test_invalid_expressions(self):
         """Test handling of invalid expressions."""
@@ -180,23 +186,23 @@ class TestCalculateFunction:
 
         for expr, error_substring in test_cases:
             result = await calculate(expr)
-            assert result['success'] is False
-            assert result['result'] is None
-            assert error_substring.lower() in result['error'].lower()
-            assert result['expression'] == expr
+            assert result["success"] is False
+            assert result["result"] is None
+            assert error_substring.lower() in result["error"].lower()
+            assert result["expression"] == expr
 
     async def test_division_by_zero(self):
         """Test division by zero handling."""
         result = await calculate("1/0")
-        assert result['success'] is False
-        assert result['result'] is None
-        assert "Division by zero" in result['error']
-        assert result['expression'] == "1/0"
+        assert result["success"] is False
+        assert result["result"] is None
+        assert "Division by zero" in result["error"]
+        assert result["expression"] == "1/0"
 
     async def test_none_input(self):
         """Test handling of None input."""
         result = await calculate(None)
-        assert result['success'] is False
-        assert result['result'] is None
-        assert "cannot be None" in result['error']
-        assert result['expression'] is None
+        assert result["success"] is False
+        assert result["result"] is None
+        assert "cannot be None" in result["error"]
+        assert result["expression"] is None

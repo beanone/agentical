@@ -3,10 +3,14 @@
 This module provides comprehensive test coverage for the filesystem server implementation.
 """
 
-import os
 import pytest
 from pathlib import Path
-from server.fs_server import read_file, write_file, list_directory, FSError, WORKSPACE_DIR
+from server.fs_server import (
+    read_file,
+    write_file,
+    list_directory,
+    WORKSPACE_DIR,
+)
 
 
 @pytest.fixture
@@ -33,6 +37,7 @@ async def setup_workspace():
 
     # Cleanup after tests
     import shutil
+
     shutil.rmtree(test_dir, ignore_errors=True)
     test_file.unlink(missing_ok=True)
 
@@ -91,7 +96,9 @@ class TestWriteFile:
 
     async def test_write_nested_file(self, setup_workspace):
         """Test writing to a file in a nested directory."""
-        result = await write_file("test_dir/nested/new_nested.txt", "New nested content")
+        result = await write_file(
+            "test_dir/nested/new_nested.txt", "New nested content"
+        )
         assert "Successfully wrote" in result
 
         # Verify the content was written

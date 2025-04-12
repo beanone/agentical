@@ -175,19 +175,24 @@ class OpenAIBackend(LLMBackend[list[dict[str, str]]]):
                 messages.append(
                     self.schema_adapter.create_assistant_message(
                         content=None,
-                        tool_calls=[{
-                            "id": tool_call.id,
-                            "type": "function",
-                            "function": {
-                                "name": tool_call.function.name,
-                                "arguments": tool_call.function.arguments,
-                            },
-                        } for tool_call in message.tool_calls],
+                        tool_calls=[
+                            {
+                                "id": tool_call.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tool_call.function.name,
+                                    "arguments": tool_call.function.arguments,
+                                },
+                            }
+                            for tool_call in message.tool_calls
+                        ],
                     )
                 )
 
                 # Handle each tool call
-                for tool_call, (function_name, function_args) in zip(message.tool_calls, tool_calls):
+                for tool_call, (function_name, function_args) in zip(
+                    message.tool_calls, tool_calls
+                ):
                     # Execute the tool
                     tool_start = time.time()
                     try:

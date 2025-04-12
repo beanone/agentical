@@ -2,7 +2,6 @@
 
 import pytest
 from mcp.types import Prompt as MCPPrompt, PromptArgument
-from pydantic import ValidationError
 
 from agentical.mcp.prompt_registry import PromptRegistry
 
@@ -25,9 +24,9 @@ def sample_prompts():
                     name="arg1",
                     description="First argument",
                     type="string",
-                    required=True
+                    required=True,
                 )
-            ]
+            ],
         ),
         MCPPrompt(
             name="prompt2",
@@ -37,9 +36,9 @@ def sample_prompts():
                     name="arg2",
                     description="Second argument",
                     type="number",
-                    required=False
+                    required=False,
                 )
-            ]
+            ],
         ),
     ]
 
@@ -225,7 +224,9 @@ async def test_register_server_prompts_empty_list(prompt_registry):
     assert len(prompt_registry.prompts_by_server["server1"]) == 0
 
 
-async def test_register_server_prompts_multiple_servers(prompt_registry, sample_prompts):
+async def test_register_server_prompts_multiple_servers(
+    prompt_registry, sample_prompts
+):
     """Test registering prompts for multiple servers."""
     # Register prompts for first server
     prompt_registry.register_server_prompts("server1", sample_prompts)

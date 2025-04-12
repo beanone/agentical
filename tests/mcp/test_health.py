@@ -68,7 +68,9 @@ async def health_monitor(mock_reconnector, mock_cleanup_handler):
     await monitor.stop_monitoring()
     # Double check task is properly cleaned up
     if monitor._monitor_task and not monitor._monitor_task.done():
-        logger.warning("Monitor task still running after stop_monitoring, forcing cleanup")
+        logger.warning(
+            "Monitor task still running after stop_monitoring, forcing cleanup"
+        )
         monitor._monitor_task.cancel()
         try:
             await monitor._monitor_task

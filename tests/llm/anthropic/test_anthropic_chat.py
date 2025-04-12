@@ -2,7 +2,6 @@
 
 import os
 from unittest.mock import AsyncMock, Mock, patch
-import json
 
 import anthropic
 import httpx
@@ -117,7 +116,7 @@ async def test_process_query_without_tool_calls(
         content=[{"type": "text", "text": "<answer>Test response</answer>"}],
         stop_reason="end_turn",
         stop_sequence=None,
-        usage=Usage(input_tokens=10, output_tokens=20)
+        usage=Usage(input_tokens=10, output_tokens=20),
     )
 
     # Configure mock client
@@ -153,11 +152,16 @@ async def test_process_query_with_tool_calls(
         role="assistant",
         type="message",
         content=[
-            {"type": "tool_use", "id": "call1", "name": "tool1", "input": {"param1": "test"}}
+            {
+                "type": "tool_use",
+                "id": "call1",
+                "name": "tool1",
+                "input": {"param1": "test"},
+            }
         ],
         stop_reason="tool_use",
         stop_sequence=None,
-        usage=Usage(input_tokens=10, output_tokens=20)
+        usage=Usage(input_tokens=10, output_tokens=20),
     )
 
     # Second response with final answer
@@ -169,15 +173,13 @@ async def test_process_query_with_tool_calls(
         content=[{"type": "text", "text": "Final response"}],
         stop_reason="end_turn",
         stop_sequence=None,
-        usage=Usage(input_tokens=10, output_tokens=20)
+        usage=Usage(input_tokens=10, output_tokens=20),
     )
 
     # Configure mock client
     mock_client = AsyncMock()
     mock_client.messages = AsyncMock()
-    mock_client.messages.create = AsyncMock(
-        side_effect=[mock_message1, mock_message2]
-    )
+    mock_client.messages.create = AsyncMock(side_effect=[mock_message1, mock_message2])
     mock_anthropic_client.return_value = mock_client
 
     # Mock tool execution
@@ -215,11 +217,16 @@ async def test_process_query_with_tool_error(
         role="assistant",
         type="message",
         content=[
-            {"type": "tool_use", "id": "call1", "name": "tool1", "input": {"param1": "test"}}
+            {
+                "type": "tool_use",
+                "id": "call1",
+                "name": "tool1",
+                "input": {"param1": "test"},
+            }
         ],
         stop_reason="tool_use",
         stop_sequence=None,
-        usage=Usage(input_tokens=10, output_tokens=20)
+        usage=Usage(input_tokens=10, output_tokens=20),
     )
 
     # Second response with error handling
@@ -231,15 +238,13 @@ async def test_process_query_with_tool_error(
         content=[{"type": "text", "text": "Error handled response"}],
         stop_reason="end_turn",
         stop_sequence=None,
-        usage=Usage(input_tokens=10, output_tokens=20)
+        usage=Usage(input_tokens=10, output_tokens=20),
     )
 
     # Configure mock client
     mock_client = AsyncMock()
     mock_client.messages = AsyncMock()
-    mock_client.messages.create = AsyncMock(
-        side_effect=[mock_message1, mock_message2]
-    )
+    mock_client.messages.create = AsyncMock(side_effect=[mock_message1, mock_message2])
     mock_anthropic_client.return_value = mock_client
 
     # Mock tool execution to raise error
@@ -274,7 +279,7 @@ async def test_process_query_with_context(
         stop_reason="end_turn",
         stop_sequence=None,
         usage=Usage(input_tokens=10, output_tokens=20),
-        tool_calls=None
+        tool_calls=None,
     )
 
     # Configure mock client
@@ -305,9 +310,7 @@ async def test_process_query_with_api_error(
     """Test handling of API errors."""
     # Configure mock client to raise an error
     mock_client = Mock()
-    mock_client.messages.create = AsyncMock(
-        side_effect=Exception("API error")
-    )
+    mock_client.messages.create = AsyncMock(side_effect=Exception("API error"))
     mock_anthropic_client.return_value = mock_client
 
     # Execute test
@@ -338,11 +341,16 @@ async def test_process_query_with_multiple_tool_calls(
         role="assistant",
         type="message",
         content=[
-            {"type": "tool_use", "id": "call1", "name": "tool1", "input": {"param1": "test1"}}
+            {
+                "type": "tool_use",
+                "id": "call1",
+                "name": "tool1",
+                "input": {"param1": "test1"},
+            }
         ],
         stop_reason="tool_use",
         stop_sequence=None,
-        usage=Usage(input_tokens=10, output_tokens=20)
+        usage=Usage(input_tokens=10, output_tokens=20),
     )
 
     # Second response with another tool call
@@ -352,11 +360,16 @@ async def test_process_query_with_multiple_tool_calls(
         role="assistant",
         type="message",
         content=[
-            {"type": "tool_use", "id": "call2", "name": "tool1", "input": {"param1": "test2"}}
+            {
+                "type": "tool_use",
+                "id": "call2",
+                "name": "tool1",
+                "input": {"param1": "test2"},
+            }
         ],
         stop_reason="tool_use",
         stop_sequence=None,
-        usage=Usage(input_tokens=10, output_tokens=20)
+        usage=Usage(input_tokens=10, output_tokens=20),
     )
 
     # Third response with final answer
@@ -368,7 +381,7 @@ async def test_process_query_with_multiple_tool_calls(
         content=[{"type": "text", "text": "Final response"}],
         stop_reason="end_turn",
         stop_sequence=None,
-        usage=Usage(input_tokens=10, output_tokens=20)
+        usage=Usage(input_tokens=10, output_tokens=20),
     )
 
     # Configure mock client
@@ -417,7 +430,7 @@ async def test_process_query_with_system_content(
         content=[{"type": "text", "text": "<answer>Test response</answer>"}],
         stop_reason="end_turn",
         stop_sequence=None,
-        usage=Usage(input_tokens=10, output_tokens=20)
+        usage=Usage(input_tokens=10, output_tokens=20),
     )
 
     # Configure mock client

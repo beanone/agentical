@@ -62,9 +62,13 @@ class ResourceRegistry:
             raise ValueError("Resource name cannot be empty")
 
         if not isinstance(resource.name, str):
-            raise ValueError(f"Resource name must be a string, got {type(resource.name)}")
+            raise ValueError(
+                f"Resource name must be a string, got {type(resource.name)}"
+            )
 
-    def _validate_resources(self, resources: List[MCPResource], server_name: str) -> None:
+    def _validate_resources(
+        self, resources: List[MCPResource], server_name: str
+    ) -> None:
         """Validate a list of resources.
 
         Args:
@@ -87,7 +91,9 @@ class ResourceRegistry:
         if len(new_names) != len(resources):
             raise ValueError("Duplicate resource names found in the resources list")
 
-    def register_server_resources(self, server_name: str, resources: List[MCPResource]) -> None:
+    def register_server_resources(
+        self, server_name: str, resources: List[MCPResource]
+    ) -> None:
         """Register resources for a specific server.
 
         Args:
@@ -123,7 +129,10 @@ class ResourceRegistry:
 
             logger.debug(
                 "Resources registered successfully",
-                extra={"server_name": server_name, "total_resources": len(self.all_resources)},
+                extra={
+                    "server_name": server_name,
+                    "total_resources": len(self.all_resources),
+                },
             )
         except (TypeError, ValueError) as e:
             logger.error(
@@ -200,7 +209,9 @@ class ResourceRegistry:
             returns the first server found.
         """
         if not resource_name or not isinstance(resource_name, str):
-            logger.warning("Invalid resource name", extra={"resource_name": resource_name})
+            logger.warning(
+                "Invalid resource name", extra={"resource_name": resource_name}
+            )
             return None
 
         # Find the server

@@ -89,7 +89,7 @@ def mock_mcp_resources():
             description="Test resource 1",
             mimeType="text/plain",
             size=1024,
-            annotations=None
+            annotations=None,
         ),
         MCPResource(
             uri="https://example.com/resource2",
@@ -97,7 +97,7 @@ def mock_mcp_resources():
             description="Test resource 2",
             mimeType="application/json",
             size=2048,
-            annotations=None
+            annotations=None,
         ),
     ]
 
@@ -124,8 +124,12 @@ def mock_session(mock_mcp_tools, mock_mcp_resources, mock_mcp_prompts):
     """Fixture providing a mock MCP session factory."""
 
     def create_session(server_name=None):
-        session = MockClientSession(tools=mock_mcp_tools.copy(), server_name=server_name)
-        session.list_resources = AsyncMock(return_value=Mock(resources=mock_mcp_resources))
+        session = MockClientSession(
+            tools=mock_mcp_tools.copy(), server_name=server_name
+        )
+        session.list_resources = AsyncMock(
+            return_value=Mock(resources=mock_mcp_resources)
+        )
         session.list_prompts = AsyncMock(return_value=Mock(prompts=mock_mcp_prompts))
         return session
 
@@ -175,7 +179,9 @@ async def test_provider_initialize_error(mock_llm_backend, valid_server_configs)
     provider = MCPToolProvider(mock_llm_backend, server_configs=valid_server_configs)
 
     # Mock config provider to raise an exception
-    with patch.object(provider.config_provider, "load_config", side_effect=Exception("Config error")):
+    with patch.object(
+        provider.config_provider, "load_config", side_effect=Exception("Config error")
+    ):
         with pytest.raises(Exception, match="Config error"):
             await provider.initialize()
 
@@ -267,14 +273,17 @@ async def test_execute_tool_success(
     # Create a session with tools
     session = MockClientSession(tools=mock_mcp_tools)
 
-    with patch.object(
-        provider.connection_service._connection_manager,
-        "connect",
-        side_effect=lambda name, config: session,
-    ), patch.object(
-        provider.connection_service,
-        "get_session",
-        return_value=session,
+    with (
+        patch.object(
+            provider.connection_service._connection_manager,
+            "connect",
+            side_effect=lambda name, config: session,
+        ),
+        patch.object(
+            provider.connection_service,
+            "get_session",
+            return_value=session,
+        ),
     ):
         # Connect to a server
         await provider.mcp_connect("server1")
@@ -337,7 +346,9 @@ async def test_mcp_connect_connection_error(mock_llm_backend, valid_server_confi
 
 
 @pytest.mark.asyncio
-async def test_mcp_connect_resource_error(mock_llm_backend, valid_server_configs, mock_session):
+async def test_mcp_connect_resource_error(
+    mock_llm_backend, valid_server_configs, mock_session
+):
     """Test resource registration error handling."""
     provider = MCPToolProvider(mock_llm_backend, server_configs=valid_server_configs)
     await provider.initialize()
@@ -355,7 +366,9 @@ async def test_mcp_connect_resource_error(mock_llm_backend, valid_server_configs
 
 
 @pytest.mark.asyncio
-async def test_mcp_connect_prompt_error(mock_llm_backend, valid_server_configs, mock_session):
+async def test_mcp_connect_prompt_error(
+    mock_llm_backend, valid_server_configs, mock_session
+):
     """Test prompt registration error handling."""
     provider = MCPToolProvider(mock_llm_backend, server_configs=valid_server_configs)
     await provider.initialize()
@@ -389,7 +402,9 @@ async def test_mcp_connect_all_error(mock_llm_backend, valid_server_configs):
 
 
 @pytest.mark.asyncio
-async def test_cleanup_server_error(mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack):
+async def test_cleanup_server_error(
+    mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack
+):
     """Test error handling during server cleanup."""
     provider = MCPToolProvider(mock_llm_backend, server_configs=valid_server_configs)
     provider.exit_stack = mock_exit_stack
@@ -403,7 +418,11 @@ async def test_cleanup_server_error(mock_llm_backend, valid_server_configs, mock
         await provider.mcp_connect("server1")
 
         # Mock cleanup to raise an error
-        with patch.object(provider.connection_service, "disconnect", side_effect=Exception("Cleanup failed")):
+        with patch.object(
+            provider.connection_service,
+            "disconnect",
+            side_effect=Exception("Cleanup failed"),
+        ):
             # Should not raise an exception, just log the error
             await provider.cleanup_server("server1")
             # Verify tools were still removed
@@ -411,7 +430,9 @@ async def test_cleanup_server_error(mock_llm_backend, valid_server_configs, mock
 
 
 @pytest.mark.asyncio
-async def test_reconnect_error(mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack):
+async def test_reconnect_error(
+    mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack
+):
     """Test error handling during reconnection."""
     provider = MCPToolProvider(mock_llm_backend, server_configs=valid_server_configs)
     provider.exit_stack = mock_exit_stack
@@ -425,13 +446,19 @@ async def test_reconnect_error(mock_llm_backend, valid_server_configs, mock_sess
         await provider.mcp_connect("server1")
 
         # Mock reconnect to raise an error
-        with patch.object(provider.connection_service, "connect", side_effect=Exception("Reconnect failed")):
+        with patch.object(
+            provider.connection_service,
+            "connect",
+            side_effect=Exception("Reconnect failed"),
+        ):
             success = await provider.reconnect("server1")
             assert not success  # Should return False on error
 
 
 @pytest.mark.asyncio
-async def test_cleanup_error(mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack):
+async def test_cleanup_error(
+    mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack
+):
     """Test error handling during cleanup."""
     provider = MCPToolProvider(mock_llm_backend, server_configs=valid_server_configs)
     provider.exit_stack = mock_exit_stack
@@ -445,7 +472,11 @@ async def test_cleanup_error(mock_llm_backend, valid_server_configs, mock_sessio
         await provider.mcp_connect("server1")
 
         # Mock cleanup to raise an error
-        with patch.object(provider.connection_service, "disconnect", side_effect=Exception("Cleanup failed")):
+        with patch.object(
+            provider.connection_service,
+            "disconnect",
+            side_effect=Exception("Cleanup failed"),
+        ):
             # Should not raise an exception, just log the error
             await provider.cleanup_all()
             # Verify tools were still removed
@@ -453,7 +484,9 @@ async def test_cleanup_error(mock_llm_backend, valid_server_configs, mock_sessio
 
 
 @pytest.mark.asyncio
-async def test_process_query_error(mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack):
+async def test_process_query_error(
+    mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack
+):
     """Test error handling during query processing."""
     provider = MCPToolProvider(mock_llm_backend, server_configs=valid_server_configs)
     provider.exit_stack = mock_exit_stack
@@ -467,13 +500,19 @@ async def test_process_query_error(mock_llm_backend, valid_server_configs, mock_
         await provider.mcp_connect("server1")
 
         # Mock query processing to raise an error
-        with patch.object(provider.llm_backend, "process_query", side_effect=Exception("Query processing failed")):
+        with patch.object(
+            provider.llm_backend,
+            "process_query",
+            side_effect=Exception("Query processing failed"),
+        ):
             with pytest.raises(Exception, match="Query processing failed"):
                 await provider.process_query("test query")
 
 
 @pytest.mark.asyncio
-async def test_execute_tool_error(mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack):
+async def test_execute_tool_error(
+    mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack
+):
     """Test error handling during tool execution."""
     provider = MCPToolProvider(mock_llm_backend, server_configs=valid_server_configs)
     provider.exit_stack = mock_exit_stack
@@ -487,16 +526,22 @@ async def test_execute_tool_error(mock_llm_backend, valid_server_configs, mock_s
         await provider.mcp_connect("server1")
 
         # Mock tool execution to raise an error
-        with patch.object(provider.connection_service, "get_session", return_value=mock_session()):
+        with patch.object(
+            provider.connection_service, "get_session", return_value=mock_session()
+        ):
             session = provider.connection_service.get_session("server1")
-            session.call_tool = AsyncMock(side_effect=Exception("Tool execution failed"))
+            session.call_tool = AsyncMock(
+                side_effect=Exception("Tool execution failed")
+            )
 
             with pytest.raises(Exception, match="Tool execution failed"):
                 await provider.execute_tool("tool1", {})
 
 
 @pytest.mark.asyncio
-async def test_get_resource_error(mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack):
+async def test_get_resource_error(
+    mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack
+):
     """Test error handling during resource retrieval."""
     provider = MCPToolProvider(mock_llm_backend, server_configs=valid_server_configs)
     provider.exit_stack = mock_exit_stack
@@ -510,13 +555,17 @@ async def test_get_resource_error(mock_llm_backend, valid_server_configs, mock_s
         await provider.mcp_connect("server1")
 
         # Mock resource retrieval to raise an error
-        with patch.object(provider.resource_registry, "find_resource_server", return_value=None):
+        with patch.object(
+            provider.resource_registry, "find_resource_server", return_value=None
+        ):
             with pytest.raises(ValueError, match="Resource not found"):
                 await provider.get_resource("nonexistent_resource")
 
 
 @pytest.mark.asyncio
-async def test_get_prompt_error(mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack):
+async def test_get_prompt_error(
+    mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack
+):
     """Test error handling during prompt retrieval."""
     provider = MCPToolProvider(mock_llm_backend, server_configs=valid_server_configs)
     provider.exit_stack = mock_exit_stack
@@ -530,13 +579,17 @@ async def test_get_prompt_error(mock_llm_backend, valid_server_configs, mock_ses
         await provider.mcp_connect("server1")
 
         # Mock prompt retrieval to raise an error
-        with patch.object(provider.prompt_registry, "find_prompt_server", return_value=None):
+        with patch.object(
+            provider.prompt_registry, "find_prompt_server", return_value=None
+        ):
             with pytest.raises(ValueError, match="Prompt not found"):
                 await provider.get_prompt("nonexistent_prompt")
 
 
 @pytest.mark.asyncio
-async def test_process_query_impl_error(mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack):
+async def test_process_query_impl_error(
+    mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack
+):
     """Test error handling in query implementation."""
     provider = MCPToolProvider(mock_llm_backend, server_configs=valid_server_configs)
     provider.exit_stack = mock_exit_stack
@@ -550,7 +603,11 @@ async def test_process_query_impl_error(mock_llm_backend, valid_server_configs, 
         await provider.mcp_connect("server1")
 
         # Mock query implementation to raise an error
-        with patch.object(provider.llm_backend, "process_query", side_effect=Exception("Query processing failed")):
+        with patch.object(
+            provider.llm_backend,
+            "process_query",
+            side_effect=Exception("Query processing failed"),
+        ):
             with pytest.raises(Exception, match="Query processing failed"):
                 await provider.process_query("test query")
 
@@ -578,10 +635,15 @@ async def test_resource_management(
         resources = provider.resource_registry.get_server_resources(server_name)
         resource = next(r for r in resources if r.name == "resource1")
         assert resource.name == "resource1"
-        assert str(resource.uri) == "https://example.com/resource1"  # Convert AnyUrl to string for comparison
+        assert (
+            str(resource.uri) == "https://example.com/resource1"
+        )  # Convert AnyUrl to string for comparison
 
         # Test resource not found
-        assert provider.resource_registry.find_resource_server("nonexistent_resource") is None
+        assert (
+            provider.resource_registry.find_resource_server("nonexistent_resource")
+            is None
+        )
 
 
 @pytest.mark.asyncio
@@ -681,16 +743,21 @@ async def test_tool_execution_error_handling(
 
     # Create a mock session with error-raising call_tool
     mock_session_instance = mock_session("server1")
-    mock_session_instance.call_tool = AsyncMock(side_effect=Exception("Tool execution failed"))
+    mock_session_instance.call_tool = AsyncMock(
+        side_effect=Exception("Tool execution failed")
+    )
 
-    with patch.object(
-        provider.connection_service._connection_manager,
-        "connect",
-        side_effect=lambda name, config: mock_session_instance,
-    ), patch.object(
-        provider.connection_service,
-        "get_session",
-        return_value=mock_session_instance,
+    with (
+        patch.object(
+            provider.connection_service._connection_manager,
+            "connect",
+            side_effect=lambda name, config: mock_session_instance,
+        ),
+        patch.object(
+            provider.connection_service,
+            "get_session",
+            return_value=mock_session_instance,
+        ),
     ):
         # Connect to a server
         await provider.mcp_connect("server1")
@@ -749,7 +816,9 @@ async def test_prompt_retrieval_edge_cases(
 
 
 @pytest.mark.asyncio
-async def test_resource_not_found_error(mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack):
+async def test_resource_not_found_error(
+    mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack
+):
     """Test error handling when a resource is not found.
 
     This test verifies that appropriate errors are raised when:
@@ -779,7 +848,9 @@ async def test_resource_not_found_error(mock_llm_backend, valid_server_configs, 
 
 
 @pytest.mark.asyncio
-async def test_prompt_not_found_error(mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack):
+async def test_prompt_not_found_error(
+    mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack
+):
     """Test error handling when a prompt is not found.
 
     This test verifies that appropriate errors are raised when:
@@ -809,7 +880,9 @@ async def test_prompt_not_found_error(mock_llm_backend, valid_server_configs, mo
 
 
 @pytest.mark.asyncio
-async def test_cleanup_server_error_handling(mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack):
+async def test_cleanup_server_error_handling(
+    mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack
+):
     """Test error handling during server cleanup.
 
     This test verifies:
@@ -834,11 +907,22 @@ async def test_cleanup_server_error_handling(mock_llm_backend, valid_server_conf
         assert len(provider.tool_registry.tools_by_server["server1"]) > 0
 
         # Test error case with a server that exists
-        with patch.object(provider.connection_service, "cleanup", side_effect=Exception("Cleanup error")), \
-             patch.object(provider.tool_registry, "remove_server_tools") as mock_remove_tools, \
-             patch.object(provider.resource_registry, "remove_server_resources") as mock_remove_resources, \
-             patch.object(provider.prompt_registry, "remove_server_prompts") as mock_remove_prompts:
-
+        with (
+            patch.object(
+                provider.connection_service,
+                "cleanup",
+                side_effect=Exception("Cleanup error"),
+            ),
+            patch.object(
+                provider.tool_registry, "remove_server_tools"
+            ) as mock_remove_tools,
+            patch.object(
+                provider.resource_registry, "remove_server_resources"
+            ) as mock_remove_resources,
+            patch.object(
+                provider.prompt_registry, "remove_server_prompts"
+            ) as mock_remove_prompts,
+        ):
             # Cleanup should re-raise the exception
             with pytest.raises(Exception, match="Cleanup error"):
                 await provider.cleanup_server("server1")
@@ -850,7 +934,9 @@ async def test_cleanup_server_error_handling(mock_llm_backend, valid_server_conf
 
         # Test cleanup of non-existent server (should not raise)
         # Use a new mock that doesn't raise an error
-        with patch.object(provider.connection_service, "cleanup", new_callable=AsyncMock) as mock_cleanup:
+        with patch.object(
+            provider.connection_service, "cleanup", new_callable=AsyncMock
+        ) as mock_cleanup:
             await provider.cleanup_server("nonexistent_server")
             mock_cleanup.assert_called_once_with("nonexistent_server")
 
@@ -875,7 +961,9 @@ async def test_connect_all_empty_server_list(mock_llm_backend):
 
 
 @pytest.mark.asyncio
-async def test_connect_all_partial_failure(mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack):
+async def test_connect_all_partial_failure(
+    mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack
+):
     """Test handling of partial connection failures when connecting to multiple servers.
 
     This test verifies that when connecting to multiple servers:
@@ -897,7 +985,7 @@ async def test_connect_all_partial_failure(mock_llm_backend, valid_server_config
     with patch.object(
         provider.connection_service._connection_manager,
         "connect",
-        side_effect=mock_connect
+        side_effect=mock_connect,
     ):
         results = await provider.mcp_connect_all()
 
@@ -915,7 +1003,9 @@ async def test_connect_all_partial_failure(mock_llm_backend, valid_server_config
 
 
 @pytest.mark.asyncio
-async def test_cleanup_all_error_handling(mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack):
+async def test_cleanup_all_error_handling(
+    mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack
+):
     """Test error handling during cleanup_all operation.
 
     This test verifies that during cleanup_all:
@@ -943,13 +1033,16 @@ async def test_cleanup_all_error_handling(mock_llm_backend, valid_server_configs
         assert len(provider.prompt_registry.prompts_by_server) == 2
 
         # Mock cleanup to fail for connection service but still allow registry cleanup
-        provider.connection_service.cleanup_all = AsyncMock(side_effect=Exception("Cleanup error"))
+        provider.connection_service.cleanup_all = AsyncMock(
+            side_effect=Exception("Cleanup error")
+        )
 
         # Mock registry clear methods to verify they're called
-        with patch.object(provider.tool_registry, "clear") as mock_tool_clear, \
-             patch.object(provider.resource_registry, "clear") as mock_resource_clear, \
-             patch.object(provider.prompt_registry, "clear") as mock_prompt_clear:
-
+        with (
+            patch.object(provider.tool_registry, "clear") as mock_tool_clear,
+            patch.object(provider.resource_registry, "clear") as mock_resource_clear,
+            patch.object(provider.prompt_registry, "clear") as mock_prompt_clear,
+        ):
             try:
                 # Should not raise despite the error
                 await provider.cleanup_all()

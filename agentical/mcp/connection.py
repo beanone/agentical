@@ -17,13 +17,12 @@ Example:
     from agentical.mcp.connection import MCPConnectionManager
     from agentical.mcp.schemas import ServerConfig
 
+
     async def connect_to_server():
         async with AsyncExitStack() as stack:
             manager = MCPConnectionManager(stack)
             config = ServerConfig(
-                command="server_command",
-                args=["--port", "8080"],
-                is_websocket=False
+                command="server_command", args=["--port", "8080"], is_websocket=False
             )
             try:
                 session = await manager.connect("my_server", config)
@@ -86,8 +85,7 @@ class MCPConnectionManager:
         manager = MCPConnectionManager(AsyncExitStack())
         try:
             session = await manager.connect(
-                "server1",
-                ServerConfig(command="cmd", args=[])
+                "server1", ServerConfig(command="cmd", args=[])
             )
             # Use session...
         finally:

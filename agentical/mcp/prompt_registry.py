@@ -87,7 +87,9 @@ class PromptRegistry:
         if len(new_names) != len(prompts):
             raise ValueError("Duplicate prompt names found in the prompts list")
 
-    def register_server_prompts(self, server_name: str, prompts: List[MCPPrompt]) -> None:
+    def register_server_prompts(
+        self, server_name: str, prompts: List[MCPPrompt]
+    ) -> None:
         """Register prompts for a specific server.
 
         Args:
@@ -123,7 +125,10 @@ class PromptRegistry:
 
             logger.debug(
                 "Prompts registered successfully",
-                extra={"server_name": server_name, "total_prompts": len(self.all_prompts)},
+                extra={
+                    "server_name": server_name,
+                    "total_prompts": len(self.all_prompts),
+                },
             )
         except (TypeError, ValueError) as e:
             logger.error(

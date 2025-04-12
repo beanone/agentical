@@ -23,7 +23,7 @@ def sample_resources():
             description="Test resource 1",
             mimeType="text/plain",
             size=1024,
-            annotations=None
+            annotations=None,
         ),
         MCPResource(
             uri=AnyUrl("https://example.com/resource2"),
@@ -31,7 +31,7 @@ def sample_resources():
             description="Test resource 2",
             mimeType="application/json",
             size=2048,
-            annotations=None
+            annotations=None,
         ),
     ]
 
@@ -60,7 +60,7 @@ async def test_register_server_resources_replace(resource_registry, sample_resou
             description="Test resource 3",
             mimeType="text/plain",
             size=1024,
-            annotations=None
+            annotations=None,
         )
     ]
     resource_registry.register_server_resources("server1", new_resources)
@@ -151,7 +151,7 @@ async def test_validate_resource_empty_name(resource_registry):
                 description="test",
                 mimeType="text/plain",
                 size=1024,
-                annotations=None
+                annotations=None,
             )
         )
 
@@ -171,7 +171,7 @@ async def test_validate_resources_duplicate_names(resource_registry):
             description="test1",
             mimeType="text/plain",
             size=1024,
-            annotations=None
+            annotations=None,
         ),
         MCPResource(
             uri=AnyUrl("https://example.com/resource2"),
@@ -179,7 +179,7 @@ async def test_validate_resources_duplicate_names(resource_registry):
             description="test2",
             mimeType="text/plain",
             size=1024,
-            annotations=None
+            annotations=None,
         ),
     ]
     with pytest.raises(ValueError, match="Duplicate resource names found"):
@@ -200,7 +200,7 @@ async def test_register_server_resources_error_handling(resource_registry):
             description="test1",
             mimeType="text/plain",
             size=1024,
-            annotations=None
+            annotations=None,
         ),
         MCPResource(
             uri=AnyUrl("https://example.com/resource2"),
@@ -208,14 +208,16 @@ async def test_register_server_resources_error_handling(resource_registry):
             description="test2",
             mimeType="text/plain",
             size=1024,
-            annotations=None
+            annotations=None,
         ),
     ]
     with pytest.raises(ValueError):
         resource_registry.register_server_resources("server1", duplicate_resources)
 
 
-async def test_remove_server_resources_error_handling(resource_registry, sample_resources):
+async def test_remove_server_resources_error_handling(
+    resource_registry, sample_resources
+):
     """Test error handling during resource removal."""
     # Register resources first
     resource_registry.register_server_resources("server1", sample_resources)
@@ -263,7 +265,9 @@ async def test_register_server_resources_empty_list(resource_registry):
     assert len(resource_registry.resources_by_server["server1"]) == 0
 
 
-async def test_register_server_resources_multiple_servers(resource_registry, sample_resources):
+async def test_register_server_resources_multiple_servers(
+    resource_registry, sample_resources
+):
     """Test registering resources for multiple servers."""
     # Register resources for first server
     resource_registry.register_server_resources("server1", sample_resources)
@@ -276,7 +280,7 @@ async def test_register_server_resources_multiple_servers(resource_registry, sam
             description="Test resource 3",
             mimeType="text/plain",
             size=1024,
-            annotations=None
+            annotations=None,
         )
     ]
     resource_registry.register_server_resources("server2", other_resources)
@@ -289,7 +293,9 @@ async def test_register_server_resources_multiple_servers(resource_registry, sam
     assert resource_registry.resources_by_server["server2"] == other_resources
 
 
-async def test_remove_server_resources_verify_state(resource_registry, sample_resources):
+async def test_remove_server_resources_verify_state(
+    resource_registry, sample_resources
+):
     """Test that removing server resources maintains correct state."""
     # Register resources for multiple servers
     resource_registry.register_server_resources("server1", sample_resources)

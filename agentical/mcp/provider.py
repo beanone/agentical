@@ -18,6 +18,7 @@ Example:
     from agentical.api import LLMBackend
     from agentical.mcp import MCPToolProvider, FileBasedMCPConfigProvider
 
+
     async def process_queries():
         # Initialize provider with config
         config_provider = FileBasedMCPConfigProvider("config.json")
@@ -194,9 +195,13 @@ class MCPToolProvider:
             try:
                 resources = await session.list_resources()
                 if resources and resources.resources:
-                    self.resource_registry.register_server_resources(server_name, resources.resources)
+                    self.resource_registry.register_server_resources(
+                        server_name, resources.resources
+                    )
                     # Verify resources were registered
-                    registered_resources = self.resource_registry.get_server_resources(server_name)
+                    registered_resources = self.resource_registry.get_server_resources(
+                        server_name
+                    )
                     logger.debug(
                         "Server resources registered",
                         extra={
@@ -212,9 +217,13 @@ class MCPToolProvider:
             try:
                 prompts = await session.list_prompts()
                 if prompts and prompts.prompts:
-                    self.prompt_registry.register_server_prompts(server_name, prompts.prompts)
+                    self.prompt_registry.register_server_prompts(
+                        server_name, prompts.prompts
+                    )
                     # Verify prompts were registered
-                    registered_prompts = self.prompt_registry.get_server_prompts(server_name)
+                    registered_prompts = self.prompt_registry.get_server_prompts(
+                        server_name
+                    )
                     logger.debug(
                         "Server prompts registered",
                         extra={
@@ -330,7 +339,6 @@ class MCPToolProvider:
                 },
             )
             raise  # Re-raise the exception after logging
-
 
     async def reconnect(self, server_name: str) -> bool:
         """Attempt to reconnect to a server."""
@@ -529,9 +537,7 @@ class MCPToolProvider:
             raise
 
     async def execute_tool(
-        self,
-        tool_name: str,
-        tool_args: dict[str, Any]
+        self, tool_name: str, tool_args: dict[str, Any]
     ) -> CallToolResult:
         """Execute a tool by name with the given arguments.
 
@@ -705,6 +711,4 @@ class MCPToolProvider:
         This method should be overridden by subclasses to implement
         the actual query processing logic using the LLM backend.
         """
-        raise NotImplementedError(
-            "Subclasses must implement _process_query_impl"
-        )
+        raise NotImplementedError("Subclasses must implement _process_query_impl")

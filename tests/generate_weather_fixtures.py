@@ -10,6 +10,7 @@ import requests
 from pathlib import Path
 from typing import Any, Dict
 
+
 def save_fixture(name: str, data: Dict[str, Any]) -> None:
     """Save fixture data to a JSON file.
 
@@ -25,6 +26,7 @@ def save_fixture(name: str, data: Dict[str, Any]) -> None:
         json.dump(data, f, indent=2)
     print(f"Saved fixture: {fixture_path}")
 
+
 def generate_weather_fixtures() -> None:
     """Generate test fixtures by making real API calls."""
     api_key = os.environ.get("OPENWEATHERMAP_API_KEY")
@@ -38,16 +40,16 @@ def generate_weather_fixtures() -> None:
     test_cases = [
         {
             "name": "london_metric",
-            "params": {"q": "London,UK", "units": "metric", "appid": api_key}
+            "params": {"q": "London,UK", "units": "metric", "appid": api_key},
         },
         {
             "name": "london_imperial",
-            "params": {"q": "London,UK", "units": "imperial", "appid": api_key}
+            "params": {"q": "London,UK", "units": "imperial", "appid": api_key},
         },
         {
             "name": "nonexistent_city",
-            "params": {"q": "NonexistentCity123", "units": "metric", "appid": api_key}
-        }
+            "params": {"q": "NonexistentCity123", "units": "metric", "appid": api_key},
+        },
     ]
 
     for case in test_cases:
@@ -64,13 +66,15 @@ def generate_weather_fixtures() -> None:
                     "url": base_url,
                     "params": {
                         # Save all params except API key
-                        k: v for k, v in case["params"].items() if k != "appid"
-                    }
+                        k: v
+                        for k, v in case["params"].items()
+                        if k != "appid"
+                    },
                 },
                 "response": {
                     "status_code": response.status_code,
-                    "json": response.json()
-                }
+                    "json": response.json(),
+                },
             }
 
             save_fixture(case["name"], fixture_data)
@@ -81,11 +85,12 @@ def generate_weather_fixtures() -> None:
             fixture_data = {
                 "request": {
                     "url": base_url,
-                    "params": {k: v for k, v in case["params"].items() if k != "appid"}
+                    "params": {k: v for k, v in case["params"].items() if k != "appid"},
                 },
-                "error": str(e)
+                "error": str(e),
             }
             save_fixture(f"{case['name']}_error", fixture_data)
+
 
 if __name__ == "__main__":
     print("Generating weather API test fixtures...")

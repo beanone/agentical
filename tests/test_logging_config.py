@@ -110,8 +110,8 @@ def test_setup_logging_creates_log_dir(clean_logging, tmp_path):
     """Test setup_logging creates log directory if it doesn't exist."""
     log_dir = tmp_path / "nonexistent" / "logs"
 
-    # Call setup_logging first to create the directory
-    logger = logging_config.setup_logging(log_dir=str(log_dir))
+    # Call setup_logging with the nonexistent directory
+    logging_config.setup_logging(log_dir=str(log_dir))
 
     # Now verify the directory and files were created
     assert log_dir.exists()
@@ -144,7 +144,7 @@ def test_setup_logging_package_levels(clean_logging):
 def test_setup_logging_third_party_levels(clean_logging):
     """Test third-party logger levels are set correctly."""
     # Call setup_logging first to configure the loggers
-    logger = logging_config.setup_logging()
+    logging_config.setup_logging()
 
     third_party_loggers = [
         "asyncio",

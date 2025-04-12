@@ -11,7 +11,7 @@ from server.terminal_server import run_command, WORKSPACE_DIR
 @pytest.fixture
 def mock_subprocess():
     """Mock subprocess.run for testing."""
-    with patch('server.terminal_server.subprocess.run') as mock_run:
+    with patch("server.terminal_server.subprocess.run") as mock_run:
         # Set up default mock response
         mock_process = MagicMock()
         mock_process.stdout = "Command output"
@@ -37,7 +37,7 @@ class TestRunCommand:
             cwd=WORKSPACE_DIR,
             capture_output=True,
             text=True,
-            check=False
+            check=False,
         )
         assert result == "Hello World"
 
@@ -68,7 +68,7 @@ class TestRunCommand:
             cwd=WORKSPACE_DIR,
             capture_output=True,
             text=True,
-            check=False
+            check=False,
         )
 
     async def test_command_output_priority(self, mock_subprocess):
