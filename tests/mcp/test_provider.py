@@ -297,7 +297,7 @@ async def test_execute_tool_no_session(
     provider.tool_registry.register_server_tools("server1", mock_mcp_tools)
 
     # Try to execute a tool without connecting
-    with pytest.raises(ValueError, match="No session found for server"):
+    with pytest.raises(ValueError, match="No active session for server server1"):
         await provider.execute_tool("tool1", {})
 
 

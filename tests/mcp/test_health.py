@@ -5,6 +5,7 @@ focusing on server health tracking, reconnection logic, and monitoring behavior.
 """
 
 import asyncio
+import logging
 import time
 
 import pytest
@@ -13,6 +14,8 @@ from agentical.mcp.health import (
     HealthMonitor,
     ServerHealth,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class MockReconnector:
@@ -62,7 +65,10 @@ async def health_monitor(mock_reconnector, mock_cleanup_handler):
     )
     yield monitor
     # Ensure monitoring is stopped after each test
+    await monitor.stop_monitoring()
+    # Double check task is properly cleaned up
     if monitor._monitor_task and not monitor._monitor_task.done():
+        logger.warning("Monitor task still running after stop_monitoring, forcing cleanup")
         monitor._monitor_task.cancel()
         try:
             await monitor._monitor_task
@@ -122,21 +128,15 @@ async def test_monitoring_missed_heartbeats(health_monitor):
     # Start monitoring
     health_monitor.start_monitoring()
 
-    try:
-        # Wait for more than heartbeat interval * max_misses
-        await asyncio.sleep(2.5)  # Slightly longer than 2 heartbeat intervals
+    # Wait for more than heartbeat interval * max_misses
+    await asyncio.sleep(2.5)  # Slightly longer than 2 heartbeat intervals
 
-        # Verify reconnection was attempted
-        assert "test_server" in health_monitor.cleanup_handler.cleanup_calls
-        assert "test_server" in health_monitor.reconnector.reconnect_calls
-    finally:
-        # Ensure monitoring is stopped
-        if health_monitor._monitor_task and not health_monitor._monitor_task.done():
-            health_monitor._monitor_task.cancel()
-            try:
-                await health_monitor._monitor_task
-            except asyncio.CancelledError:
-                pass
+    # Verify reconnection was attempted
+    assert "test_server" in health_monitor.cleanup_handler.cleanup_calls
+    assert "test_server" in health_monitor.reconnector.reconnect_calls
+
+    # Explicitly stop monitoring
+    await health_monitor.stop_monitoring()
 
 
 @pytest.mark.asyncio
@@ -207,22 +207,16 @@ async def test_multiple_server_monitoring(health_monitor):
     # Start monitoring
     health_monitor.start_monitoring()
 
-    try:
-        # Wait for heartbeats to be missed
-        await asyncio.sleep(2.5)
+    # Wait for heartbeats to be missed
+    await asyncio.sleep(2.5)
 
-        # Verify all servers were handled
-        for server in servers:
-            assert server in health_monitor.cleanup_handler.cleanup_calls
-            assert server in health_monitor.reconnector.reconnect_calls
-    finally:
-        # Ensure monitoring is stopped
-        if health_monitor._monitor_task and not health_monitor._monitor_task.done():
-            health_monitor._monitor_task.cancel()
-            try:
-                await health_monitor._monitor_task
-            except asyncio.CancelledError:
-                pass
+    # Verify all servers were handled
+    for server in servers:
+        assert server in health_monitor.cleanup_handler.cleanup_calls
+        assert server in health_monitor.reconnector.reconnect_calls
+
+    # Explicitly stop monitoring
+    await health_monitor.stop_monitoring()
 
 
 @pytest.mark.asyncio
@@ -249,23 +243,17 @@ async def test_monitor_error_handling():
 
     mock_cleanup.cleanup = raise_error
 
-    try:
-        # Start monitoring
-        monitor.start_monitoring()
+    # Start monitoring
+    monitor.start_monitoring()
 
-        # Wait for error to occur and be handled
-        await asyncio.sleep(0.3)
+    # Wait for error to occur and be handled
+    await asyncio.sleep(0.3)
 
-        # Verify monitor is still running
-        assert not monitor._monitor_task.done()
-    finally:
-        # Ensure proper cleanup
-        if monitor._monitor_task and not monitor._monitor_task.done():
-            monitor._monitor_task.cancel()
-            try:
-                await monitor._monitor_task
-            except asyncio.CancelledError:
-                pass
+    # Verify monitor is still running
+    assert not monitor._monitor_task.done()
+
+    # Explicitly stop monitoring
+    await monitor.stop_monitoring()
 
 
 @pytest.mark.asyncio

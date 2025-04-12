@@ -3,7 +3,6 @@
 This module provides test coverage for the terminal server implementation.
 """
 
-import os
 import pytest
 from unittest.mock import patch, MagicMock
 from server.terminal_server import run_command, WORKSPACE_DIR

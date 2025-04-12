@@ -38,13 +38,11 @@ if not API_KEY:
 
 class WeatherError(Exception):
     """Raised when there is an error getting weather information."""
-
     pass
 
 
 class TemperatureUnit(str, Enum):
     """Valid temperature units."""
-
     CELSIUS = "celsius"
     FAHRENHEIT = "fahrenheit"
     KELVIN = "kelvin"
@@ -81,7 +79,6 @@ class WeatherData:
     feels_like: float
     humidity: int
     wind_speed: float
-
 
 async def _check_weather_response(
     response: aiohttp.ClientResponse, location: str

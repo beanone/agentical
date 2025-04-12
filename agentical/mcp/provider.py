@@ -51,9 +51,9 @@ Implementation Notes:
 import logging
 import time
 from contextlib import AsyncExitStack
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict
 
-from mcp.types import CallToolResult, Resource as MCPResource, Prompt as MCPPrompt, Tool as MCPTool
+from mcp.types import CallToolResult, Resource as MCPResource, Prompt as MCPPrompt
 
 from agentical.api import LLMBackend
 from agentical.mcp.config import DictBasedMCPConfigProvider, MCPConfigProvider
@@ -528,81 +528,89 @@ class MCPToolProvider:
             )
             raise
 
-    async def process_query(self, query: str) -> str:
-        """Process a user query using the configured LLM backend."""
-        start_time = time.time()
-        logger.info(
-            "Processing query",
-            extra={
-                "query": query,
-                "num_tools_available": len(self.tool_registry.all_tools),
-                "num_resources_available": len(self.resource_registry.all_resources),
-                "num_prompts_available": len(self.prompt_registry.all_prompts),
-                "num_servers": len(self.tool_registry.tools_by_server),
-            },
+    async def execute_tool(
+        self,
+        tool_name: str,
+        tool_args: dict[str, Any]
+    ) -> CallToolResult:
+        """Execute a tool by name with the given arguments.
+
+        Args:
+            tool_name: Name of the tool to execute
+            tool_args: Arguments to pass to the tool
+
+        Returns:
+            CallToolResult: Result from the tool execution
+
+        Raises:
+            ValueError: If tool is not found or server is not connected
+            Exception: If tool execution fails
+        """
+        tool_start = time.time()
+        logger.debug(
+            "Executing tool", extra={"tool_name": tool_name, "tool_args": tool_args}
         )
 
-        if not self.tool_registry.tools_by_server:
-            logger.error("No active sessions")
-            raise ValueError(
-                "Not connected to any MCP server. "
-                "Please select and connect to a server first."
+        # Find which server has this tool
+        server_name = self.tool_registry.find_tool_server(tool_name)
+        if not server_name:
+            tool_duration = time.time() - tool_start
+            logger.error(
+                "Tool not found",
+                extra={
+                    "tool_name": tool_name,
+                    "duration_ms": int(tool_duration * 1000),
+                },
             )
+            raise ValueError(f"Tool {tool_name} not found in any connected server")
 
-        # Execute tool directly with MCP types
-        async def execute_tool(
-            tool_name: str, tool_args: dict[str, Any]
-        ) -> CallToolResult:
-            tool_start = time.time()
+        logger.debug(
+            "Found tool in server",
+            extra={"tool_name": tool_name, "server_name": server_name},
+        )
+        try:
+            session = self.connection_service.get_session(server_name)
+            if not session:
+                raise ValueError(f"No active session for server {server_name}")
+
+            result = await session.call_tool(tool_name, tool_args)
+            tool_duration = time.time() - tool_start
             logger.debug(
-                "Executing tool", extra={"tool_name": tool_name, "tool_args": tool_args}
+                "Tool execution successful",
+                extra={
+                    "tool_name": tool_name,
+                    "server_name": server_name,
+                    "duration_ms": int(tool_duration * 1000),
+                },
             )
-
-            # Find which server has this tool
-            server_name = self.tool_registry.find_tool_server(tool_name)
-            if not server_name:
-                tool_duration = time.time() - tool_start
-                logger.error(
-                    "Tool not found",
-                    extra={
-                        "tool_name": tool_name,
-                        "duration_ms": int(tool_duration * 1000),
-                    },
-                )
-                raise ValueError(f"Tool {tool_name} not found in any connected server")
-
-            logger.debug(
-                "Found tool in server",
-                extra={"tool_name": tool_name, "server_name": server_name},
+            return result
+        except Exception as e:
+            tool_duration = time.time() - tool_start
+            logger.error(
+                "Tool execution failed",
+                extra={
+                    "tool_name": tool_name,
+                    "server_name": server_name,
+                    "error": sanitize_log_message(str(e)),
+                    "duration_ms": int(tool_duration * 1000),
+                },
             )
-            try:
-                session = self.connection_service.get_session(server_name)
-                if not session:
-                    raise ValueError(f"No active session for server {server_name}")
+            raise
 
-                result = await session.call_tool(tool_name, tool_args)
-                tool_duration = time.time() - tool_start
-                logger.debug(
-                    "Tool execution successful",
-                    extra={
-                        "tool_name": tool_name,
-                        "server_name": server_name,
-                        "duration_ms": int(tool_duration * 1000),
-                    },
-                )
-                return result
-            except Exception as e:
-                tool_duration = time.time() - tool_start
-                logger.error(
-                    "Tool execution failed",
-                    extra={
-                        "tool_name": tool_name,
-                        "server_name": server_name,
-                        "error": sanitize_log_message(str(e)),
-                        "duration_ms": int(tool_duration * 1000),
-                    },
-                )
-                raise
+    async def process_query(self, query: str) -> str:
+        """Process a query using the LLM backend and available tools.
+
+        Args:
+            query: The query to process
+
+        Returns:
+            str: Response from the LLM backend
+
+        Raises:
+            Exception: If query processing fails
+        """
+        start_time = time.time()
+        logger.info("Processing query", extra={"query": query})
 
         try:
             # Process the query using all available tools, resources, and prompts
@@ -619,7 +627,7 @@ class MCPToolProvider:
                 tools=self.tool_registry.all_tools,
                 resources=self.resource_registry.all_resources,
                 prompts=self.prompt_registry.all_prompts,
-                execute_tool=execute_tool,
+                execute_tool=self.execute_tool,
                 context=None,
             )
             duration = time.time() - start_time

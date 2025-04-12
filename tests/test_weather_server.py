@@ -8,11 +8,12 @@ import os
 import pytest
 import aiohttp
 from pathlib import Path
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch, AsyncMock, Mock
 
 # Mock environment variable before importing the module
 with patch.dict(os.environ, {'OPENWEATHERMAP_API_KEY': 'test_api_key'}):
-    from server.weather_server import get_weather
+    from server.weather_server import (get_weather, _format_weather_response,
+                                       WeatherError, _check_weather_response)
 
 
 def load_fixture(name: str) -> dict:
@@ -104,3 +105,41 @@ class TestGetWeather:
         """Test handling of invalid temperature units."""
         result = await get_weather("London,UK", "invalid_unit")
         assert "Invalid units" in result
+
+def test_format_weather_response_success():
+    """Test weather response formatting with malformed weather array."""
+    data = load_fixture('london_metric')
+    response = data['response']['json']
+    result = _format_weather_response(response, "metric")
+    assert result is not None
+
+
+def test_format_weather_response_missing_weather():
+    """Test weather response formatting with empty data."""
+    data = load_fixture('london_metric')
+    response = data['response']['json']
+    del response['weather']
+    with pytest.raises(WeatherError):
+        _format_weather_response(response, "metric")
+
+async def test_check_weather_response_404():
+    """Test weather response checking with valid data."""
+    data = load_fixture('nonexistent_city')
+    mock_response = Mock(spec=aiohttp.ClientResponse)
+    mock_response.status = 404
+    mock_response.json = AsyncMock(return_value=data['response']['json'])
+    mock_location = "test_location"
+    with pytest.raises(WeatherError, match=f"Location not found: {mock_location}"):
+        await  _check_weather_response(mock_response, mock_location)
+
+async def test_check_weather_response_500():
+    """Test weather response checking with valid data."""
+    data = load_fixture('nonexistent_city')
+    mock_response = Mock(spec=aiohttp.ClientResponse)
+    mock_response.status = 500
+    mock_error_message = "Internal Server Error"
+    mock_response.text.return_value = mock_error_message
+    mock_response.json = AsyncMock(return_value=data['response']['json'])
+    mock_location = "test_location"
+    with pytest.raises(WeatherError, match= f"OpenWeatherMap API error: 500 - {mock_error_message}"):
+        await  _check_weather_response(mock_response, mock_location)
