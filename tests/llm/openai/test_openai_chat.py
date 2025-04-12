@@ -8,13 +8,13 @@ import pytest
 from mcp.types import Tool as MCPTool
 from openai.types.chat import ChatCompletion, ChatCompletionMessage
 
-from agentical.openai_backend.openai_chat import OpenAIBackend
+from agentical.llm.openai.openai_chat import OpenAIBackend
 
 
 @pytest.fixture
 def mock_openai_client():
     """Fixture providing a mock OpenAI client."""
-    with patch("agentical.openai_backend.openai_chat.openai.AsyncOpenAI") as mock:
+    with patch("agentical.llm.openai.openai_chat.openai.AsyncOpenAI") as mock:
         yield mock
 
 
@@ -79,10 +79,10 @@ def test_init_without_api_key():
         OpenAIBackend()
 
 
-def test_format_tools(mock_env_vars, mock_mcp_tools):
+def test_convert_tools(mock_env_vars, mock_mcp_tools):
     """Test tool formatting for OpenAI."""
     backend = OpenAIBackend()
-    formatted = backend._format_tools(mock_mcp_tools)
+    formatted = backend.convert_tools(mock_mcp_tools)
 
     assert len(formatted) == 2
     assert formatted[0]["type"] == "function"
@@ -101,11 +101,11 @@ def test_format_tools(mock_env_vars, mock_mcp_tools):
     )
 
 
-def test_format_tools_handles_missing_parameters(mock_env_vars):
+def test_convert_tools_handles_missing_parameters(mock_env_vars):
     """Test tool formatting handles tools without parameters."""
     tools = [MCPTool(name="test", description="test", parameters={}, inputSchema={})]
     backend = OpenAIBackend()
-    formatted = backend._format_tools(tools)
+    formatted = backend.convert_tools(tools)
 
     assert len(formatted) == 1
     assert formatted[0]["function"]["parameters"] == {}
@@ -365,17 +365,6 @@ async def test_process_query_handles_invalid_tool_args(
     assert mock_client.chat.completions.create.call_count == 2
 
 
-def test_convert_tools(mock_env_vars, mock_mcp_tools):
-    """Test the public convert_tools method."""
-    backend = OpenAIBackend()
-    formatted = backend.convert_tools(mock_mcp_tools)
-
-    assert len(formatted) == 2
-    assert all(tool["type"] == "function" for tool in formatted)
-    assert formatted[0]["function"]["name"] == "tool1"
-    assert formatted[1]["function"]["name"] == "tool2"
-
-
 def test_init_with_custom_model(mock_env_vars):
     """Test initialization with custom model from environment."""
     os.environ["OPENAI_MODEL"] = "custom-model"
@@ -386,7 +375,7 @@ def test_init_with_custom_model(mock_env_vars):
 def test_init_with_invalid_api_key():
     """Test initialization with invalid API key."""
     with patch(
-        "agentical.openai_backend.openai_chat.openai.AsyncOpenAI",
+        "agentical.llm.openai.openai_chat.openai.AsyncOpenAI",
         side_effect=Exception("Invalid API key"),
     ):
         with pytest.raises(

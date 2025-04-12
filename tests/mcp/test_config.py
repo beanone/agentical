@@ -198,7 +198,6 @@ async def test_dict_based_provider_config_immutability():
         )
     }
     provider = DictBasedMCPConfigProvider(original_config)
-    config1 = await provider.load_config()
 
     # Modify the original config
     original_config["test_server"].command = "modified_command"

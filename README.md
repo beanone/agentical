@@ -136,9 +136,10 @@ The framework follows a clean, layered architecture:
 ├─────────────────┤    │
 │     Client      │    ├── chat_client.py         # Generic LLM client implementation
 │ Implementation  │    │
-│                 │    ├── anthropic_backend/     # Anthropic implementation
-│                 │    ├── gemini_backend/        # Gemini implementation
-│                 │    └── openai_backend/        # OpenAI implementation
+│                 │    ├── llm/                   # LLM implementations
+│                 │    │   ├── anthropic/         # Anthropic implementation
+│                 │    │   ├── gemini/            # Gemini implementation
+│                 │    │   └── openai/            # OpenAI implementation
 └─────────────────┘
 ```
 

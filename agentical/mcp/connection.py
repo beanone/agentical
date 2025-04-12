@@ -17,13 +17,12 @@ Example:
     from agentical.mcp.connection import MCPConnectionManager
     from agentical.mcp.schemas import ServerConfig
 
+
     async def connect_to_server():
         async with AsyncExitStack() as stack:
             manager = MCPConnectionManager(stack)
             config = ServerConfig(
-                command="server_command",
-                args=["--port", "8080"],
-                is_websocket=False
+                command="server_command", args=["--port", "8080"], is_websocket=False
             )
             try:
                 session = await manager.connect("my_server", config)
@@ -54,6 +53,7 @@ from agentical.mcp.health import (
     ServerReconnector,
 )
 from agentical.mcp.schemas import ServerConfig
+from agentical.utils.log_utils import sanitize_log_message
 
 logger = logging.getLogger(__name__)
 
@@ -85,8 +85,7 @@ class MCPConnectionManager:
         manager = MCPConnectionManager(AsyncExitStack())
         try:
             session = await manager.connect(
-                "server1",
-                ServerConfig(command="cmd", args=[])
+                "server1", ServerConfig(command="cmd", args=[])
             )
             # Use session...
         finally:
@@ -431,8 +430,14 @@ class MCPConnectionService(ServerReconnector, ServerCleanupHandler):
                     await self.cleanup(server_name)
                     await self.connect(server_name, config)
                     return True
+                else:
+                    logger.debug("No config found")
+            else:
+                logger.debug(f"Server {server_name} not found in sessions")
             return False
-        except Exception:
+        except Exception as e:
+            # Log the error with sanitized message
+            logger.error("Exception during reconnect: %s", sanitize_log_message(str(e)))
             return False
 
     def get_session(self, server_name: str) -> ClientSession | None:
@@ -445,6 +450,17 @@ class MCPConnectionService(ServerReconnector, ServerCleanupHandler):
         return self._connection_manager.sessions.copy()
 
     async def cleanup_all(self) -> None:
-        """Clean up all connections and stop health monitoring."""
-        self._health_monitor.stop_monitoring()
-        await self._connection_manager.cleanup_all()
+        """Clean up all connections and stop health monitoring.
+
+        This method attempts to clean up all resources, even if some operations fail.
+        Any errors during cleanup are logged but do not prevent other cleanup operations.
+        """
+        try:
+            await self._health_monitor.stop_monitoring()
+        except Exception as e:
+            logger.error("Error stopping health monitoring: %s", str(e))
+
+        try:
+            await self._connection_manager.cleanup_all()
+        except Exception as e:
+            logger.error("Error during connection cleanup: %s", str(e))

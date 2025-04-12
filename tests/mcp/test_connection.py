@@ -136,10 +136,6 @@ async def test_connection_service_cleanup(exit_stack, server_config):
     ) as mock_connect:
         mock_connect.side_effect = [mock_session1, mock_session2]
 
-        # Connect to multiple servers
-        session1 = await service.connect("server1", server_config)
-        session2 = await service.connect("server2", server_config)
-
         # Initialize sessions
         await mock_session1.initialize()
         await mock_session2.initialize()
@@ -235,3 +231,198 @@ async def test_connection_manager_cleanup(exit_stack, server_config):
             assert not manager.sessions
             assert not manager.stdios
             assert not manager.writes
+
+
+@pytest.mark.asyncio
+async def test_connection_manager_connect_retry_failure(exit_stack, server_config):
+    """Test MCPConnectionManager connection retry failure."""
+    manager = connection.MCPConnectionManager(exit_stack)
+
+    with patch("agentical.mcp.connection.stdio_client") as mock_stdio:
+        mock_stdio.return_value = AsyncMock()
+        mock_stdio.return_value.__aenter__.side_effect = ConnectionError(
+            "Failed to connect"
+        )
+
+        with pytest.raises(ConnectionError):
+            await manager.connect("server1", server_config)
+
+        # Verify cleanup was called
+        assert "server1" not in manager.sessions
+        assert "server1" not in manager.stdios
+        assert "server1" not in manager.writes
+
+
+@pytest.mark.asyncio
+async def test_connection_manager_cleanup_nonexistent_server(exit_stack):
+    """Test cleaning up a non-existent server."""
+    manager = connection.MCPConnectionManager(exit_stack)
+
+    # Should not raise any errors
+    await manager.cleanup("nonexistent_server")
+
+
+@pytest.mark.asyncio
+async def test_connection_manager_cleanup_all_empty(exit_stack):
+    """Test cleaning up when no servers are connected."""
+    manager = connection.MCPConnectionManager(exit_stack)
+
+    # Should not raise any errors
+    await manager.cleanup_all()
+
+
+@pytest.mark.asyncio
+async def test_connection_service_connect_failure(exit_stack, server_config):
+    """Test connection service handling of connection failures."""
+    service = connection.MCPConnectionService(exit_stack)
+
+    with patch(
+        "agentical.mcp.connection.MCPConnectionManager.connect",
+        new_callable=AsyncMock,
+        side_effect=ConnectionError("Failed to connect"),
+    ):
+        with pytest.raises(ConnectionError):
+            await service.connect("server1", server_config)
+
+
+@pytest.mark.asyncio
+async def test_connection_service_cleanup_all_failure(exit_stack, server_config):
+    """Test connection service handling of cleanup failures."""
+    service = connection.MCPConnectionService(exit_stack)
+    mock_session = MockClientSession()
+
+    with patch(
+        "agentical.mcp.connection.MCPConnectionManager.connect",
+        new_callable=AsyncMock,
+        return_value=mock_session,
+    ):
+        await service.connect("server1", server_config)
+
+    with (
+        patch(
+            "agentical.mcp.connection.MCPConnectionManager.cleanup_all",
+            new_callable=AsyncMock,
+            side_effect=Exception("Cleanup failed"),
+        ) as mock_cleanup,
+        patch("agentical.mcp.connection.logger.error") as mock_logger,
+    ):
+        # Should not raise the exception
+        await service.cleanup_all()
+
+        # Verify cleanup was attempted
+        mock_cleanup.assert_called_once()
+
+        # Verify error was logged
+        mock_logger.assert_called_once()
+        assert "Error during connection cleanup" in str(mock_logger.call_args[0][0])
+        assert "Cleanup failed" in str(mock_logger.call_args[0][1])
+
+
+@pytest.mark.asyncio
+async def test_connection_manager_handle_connection_failure(exit_stack, server_config):
+    """Test MCPConnectionManager handling of connection failures."""
+    manager = connection.MCPConnectionManager(exit_stack)
+
+    with patch("agentical.mcp.connection.stdio_client") as mock_stdio:
+        mock_stdio.return_value = AsyncMock()
+        mock_stdio.return_value.__aenter__.side_effect = Exception("Connection failed")
+
+        with pytest.raises(ConnectionError):
+            await manager._handle_connection("server1", server_config)
+
+        # Verify cleanup was called
+        assert "server1" not in manager.sessions
+        assert "server1" not in manager.stdios
+        assert "server1" not in manager.writes
+
+
+@pytest.mark.asyncio
+async def test_connection_service_reconnect_success(exit_stack, server_config):
+    """Test successful reconnection through the connection service."""
+    service = connection.MCPConnectionService(exit_stack)
+    mock_session = MockClientSession()
+
+    with (
+        patch(
+            "agentical.mcp.connection.MCPConnectionManager.connect",
+            new_callable=AsyncMock,
+            return_value=mock_session,
+        ) as mock_connect,
+        patch(
+            "agentical.mcp.connection.MCPConnectionManager.cleanup",
+            new_callable=AsyncMock,
+        ) as mock_cleanup,
+    ):
+        # First connect to establish the session and store config
+        await service.connect("server1", server_config)
+        # Manually store the session and config since the mock doesn't do it
+        service._connection_manager.sessions["server1"] = mock_session
+        service._connection_manager._configs["server1"] = server_config
+
+        # Test reconnection
+        success = await service.reconnect("server1")
+        assert success, (
+            f"Reconnect failed. Sessions: {service._connection_manager.sessions}, Configs: {service._connection_manager._configs}"
+        )
+        assert service.get_session("server1") is not None
+
+        # Verify cleanup was called before reconnect
+        mock_cleanup.assert_called_once_with("server1")
+
+        # Verify connect was called twice (initial connect and reconnect)
+        assert mock_connect.call_count == 2
+        assert mock_connect.call_args_list[0][0] == ("server1", server_config)
+        assert mock_connect.call_args_list[1][0] == ("server1", server_config)
+
+
+@pytest.mark.asyncio
+async def test_connection_service_reconnect_no_session(exit_stack):
+    """Test reconnection attempt when no session exists."""
+    service = connection.MCPConnectionService(exit_stack)
+
+    # Attempt to reconnect non-existent server
+    success = await service.reconnect("nonexistent_server")
+    assert not success
+
+
+@pytest.mark.asyncio
+async def test_connection_service_reconnect_no_config(exit_stack, server_config):
+    """Test reconnection attempt when no config exists."""
+    service = connection.MCPConnectionService(exit_stack)
+    mock_session = MockClientSession()
+
+    with patch(
+        "agentical.mcp.connection.MCPConnectionManager.connect",
+        new_callable=AsyncMock,
+        return_value=mock_session,
+    ):
+        # Connect but don't store config
+        await service.connect("server1", server_config)
+        service._connection_manager._configs.clear()  # Clear stored config
+
+        # Attempt reconnection
+        success = await service.reconnect("server1")
+        assert not success
+
+
+@pytest.mark.asyncio
+async def test_connection_service_reconnect_failure(exit_stack, server_config):
+    """Test reconnection failure handling."""
+    service = connection.MCPConnectionService(exit_stack)
+    mock_session = MockClientSession()
+
+    with patch(
+        "agentical.mcp.connection.MCPConnectionManager.connect",
+        new_callable=AsyncMock,
+        return_value=mock_session,
+    ) as mock_connect:
+        # First connect to establish the session and store config
+        await service.connect("server1", server_config)
+
+        # Now patch connect to fail during reconnect
+        mock_connect.side_effect = Exception("Connection failed")
+
+        # Test reconnection failure
+        success = await service.reconnect("server1")
+        assert not success
+        assert service.get_session("server1") is None

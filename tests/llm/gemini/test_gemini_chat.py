@@ -9,7 +9,7 @@ from google.genai.types import Candidate, Content, GenerateContentResponse, Part
 from mcp.types import CallToolResult, TextContent
 from mcp.types import Tool as MCPTool
 
-from agentical.gemini_backend.gemini_chat import GeminiBackend
+from agentical.llm.gemini.gemini_chat import GeminiBackend
 
 
 @pytest.fixture
@@ -160,7 +160,7 @@ async def test_process_query_without_tool_calls(
         tools=mock_mcp_tools,
         resources=[],
         prompts=[],
-        execute_tool=AsyncMock()
+        execute_tool=AsyncMock(),
     )
 
     assert response == "Test response"
@@ -186,7 +186,9 @@ async def test_process_query_with_tool_calls(
 
     # Configure mock client
     mock_client = Mock()
-    mock_client.models.generate_content = Mock(side_effect=[mock_response1, mock_response2])
+    mock_client.models.generate_content = Mock(
+        side_effect=[mock_response1, mock_response2]
+    )
     mock_genai_client.return_value = mock_client
 
     # Mock tool execution
@@ -203,7 +205,7 @@ async def test_process_query_with_tool_calls(
         tools=mock_mcp_tools,
         resources=[],
         prompts=[],
-        execute_tool=mock_execute_tool
+        execute_tool=mock_execute_tool,
     )
 
     assert response == "Final response"
@@ -230,7 +232,9 @@ async def test_process_query_with_tool_error(
 
     # Configure mock client
     mock_client = Mock()
-    mock_client.models.generate_content = Mock(side_effect=[mock_response1, mock_response2])
+    mock_client.models.generate_content = Mock(
+        side_effect=[mock_response1, mock_response2]
+    )
     mock_genai_client.return_value = mock_client
 
     # Mock tool execution to raise error
@@ -243,7 +247,7 @@ async def test_process_query_with_tool_error(
         tools=mock_mcp_tools,
         resources=[],
         prompts=[],
-        execute_tool=mock_execute_tool
+        execute_tool=mock_execute_tool,
     )
 
     assert response == "Error handled response"
@@ -270,7 +274,7 @@ async def test_process_query_with_no_candidates(
         tools=mock_mcp_tools,
         resources=[],
         prompts=[],
-        execute_tool=AsyncMock()
+        execute_tool=AsyncMock(),
     )
 
     assert response == "No response generated"
@@ -351,5 +355,5 @@ async def test_process_query_with_api_error(
             tools=mock_mcp_tools,
             resources=[],
             prompts=[],
-            execute_tool=AsyncMock()
+            execute_tool=AsyncMock(),
         )

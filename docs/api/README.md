@@ -145,7 +145,7 @@ The framework includes a `ChatClient` that provides interactive command-line usa
 Example usage:
 ```python
 from agentical.mcp import MCPToolProvider
-from agentical.openai_backend import OpenAIBackend
+from agentical.llm.openai import OpenAIBackend
 from agentical.mcp.config import FileBasedMCPConfigProvider
 
 async def main():
@@ -161,7 +161,7 @@ async def main():
         response = await provider.process_query("What tools are available?")
         print(response)
     finally:
-        await provider.cleanup()
+        await provider.cleanup_all()
 ```
 
 ## Quick Links

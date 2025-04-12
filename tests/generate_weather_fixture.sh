@@ -1,0 +1,1 @@
+export OPENWEATHERMAP_API_KEY='<Replace with API KEY>' && python tests/generate_weather_fixtures.py

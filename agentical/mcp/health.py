@@ -163,15 +163,35 @@ class HealthMonitor:
     def start_monitoring(self) -> None:
         """Start the server health monitoring task."""
         if self._monitor_task is None or self._monitor_task.done():
+            logger.debug("Creating new health monitoring task")
             self._monitor_task = asyncio.create_task(self._monitor_servers())
-            logger.info("Started server health monitoring")
+            self._monitor_task.set_name("health_monitor")
+            logger.info(
+                "Started server health monitoring task: %s",
+                self._monitor_task.get_name(),
+            )
 
     async def stop_monitoring(self) -> None:
         """Stop the server health monitoring task."""
         if self._monitor_task and not self._monitor_task.done():
+            logger.debug(
+                "Cancelling health monitoring task: %s", self._monitor_task.get_name()
+            )
             self._monitor_task.cancel()
             try:
                 await self._monitor_task
+                logger.info(
+                    "Successfully cancelled health monitoring task: %s",
+                    self._monitor_task.get_name(),
+                )
             except asyncio.CancelledError:
-                pass
-            logger.info("Stopped server health monitoring")
+                logger.debug(
+                    "Health monitoring task cancelled: %s",
+                    self._monitor_task.get_name(),
+                )
+            except Exception as e:
+                logger.error(
+                    "Error while cancelling health monitoring task: %s - %s",
+                    self._monitor_task.get_name(),
+                    str(e),
+                )

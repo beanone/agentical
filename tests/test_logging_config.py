@@ -14,7 +14,6 @@ def clean_logging():
     # Store original state
     root_logger = logging.getLogger()
     agentical_logger = logging.getLogger("agentical")
-    mcp_logger = logging.getLogger("mcp")
 
     original_root_level = root_logger.level
     original_handlers = agentical_logger.handlers.copy()
@@ -110,8 +109,11 @@ def test_setup_logging_with_log_dir(clean_logging, temp_log_dir):
 def test_setup_logging_creates_log_dir(clean_logging, tmp_path):
     """Test setup_logging creates log directory if it doesn't exist."""
     log_dir = tmp_path / "nonexistent" / "logs"
-    logger = logging_config.setup_logging(log_dir=str(log_dir))
 
+    # Call setup_logging with the nonexistent directory
+    logging_config.setup_logging(log_dir=str(log_dir))
+
+    # Now verify the directory and files were created
     assert log_dir.exists()
     assert (log_dir / "agentical.log").exists()
     assert (log_dir / "error.log").exists()
@@ -141,7 +143,8 @@ def test_setup_logging_package_levels(clean_logging):
 
 def test_setup_logging_third_party_levels(clean_logging):
     """Test third-party logger levels are set correctly."""
-    logger = logging_config.setup_logging(level=logging.INFO)  # Not DEBUG
+    # Call setup_logging first to configure the loggers
+    logging_config.setup_logging()
 
     third_party_loggers = [
         "asyncio",
@@ -166,8 +169,6 @@ def test_setup_logging_third_party_levels_debug(clean_logging):
     ]
     for logger_name in third_party_loggers:
         logging.getLogger(logger_name).setLevel(logging.INFO)
-
-    logger = logging_config.setup_logging(level=logging.DEBUG)
 
     # In DEBUG mode, levels should remain unchanged
     for logger_name in third_party_loggers:

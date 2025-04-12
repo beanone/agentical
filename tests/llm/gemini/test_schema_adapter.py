@@ -12,7 +12,7 @@ from google.genai.types import (
 from mcp.types import CallToolResult, TextContent
 from mcp.types import Tool as MCPTool
 
-from agentical.gemini_backend.schema_adapter import SchemaAdapter
+from agentical.llm.gemini.schema_adapter import SchemaAdapter
 
 
 @pytest.fixture
