@@ -72,10 +72,11 @@ version-file = "agentical/_version.py"
 packages = ["agentical"]
 
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
+minversion = "6.0"
+addopts = "--cov=server --cov=agentical --cov-report=term-missing"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = "-v --cov=agentical --cov-report=term-missing"
+asyncio_mode = "auto"
 
 [tool.black]
 line-length = 88
@@ -130,4 +131,23 @@ check_untyped_defs = true
 
 [[tool.mypy.overrides]]
 module = ["google.*", "anthropic.*"]
-ignore_missing_imports = true 
+ignore_missing_imports = true
+
+[tool.coverage.run]
+branch = true
+source = ["server", "agentical"]
+omit = [
+    "*/tests/*",
+    "*/site-packages/*",
+    "*/__init__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "pass",
+]

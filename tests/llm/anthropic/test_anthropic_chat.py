@@ -401,3 +401,92 @@ async def test_process_query_with_multiple_tool_calls(
     assert mock_execute_tool.call_count == 2
     mock_execute_tool.assert_any_call("tool1", {"param1": "test1"})
     mock_execute_tool.assert_any_call("tool1", {"param1": "test2"})
+
+
+@pytest.mark.asyncio
+async def test_process_query_with_system_content(
+    mock_env_vars, mock_anthropic_client, mock_mcp_tools
+):
+    """Test processing a query with and without system content."""
+    # Setup mock response
+    mock_message = Message(
+        id="msg_123",
+        model="claude-3",
+        role="assistant",
+        type="message",
+        content=[{"type": "text", "text": "<answer>Test response</answer>"}],
+        stop_reason="end_turn",
+        stop_sequence=None,
+        usage=Usage(input_tokens=10, output_tokens=20)
+    )
+
+    # Configure mock client
+    mock_client = AsyncMock()
+    mock_client.messages = AsyncMock()
+    mock_client.messages.create = AsyncMock(return_value=mock_message)
+    mock_anthropic_client.return_value = mock_client
+
+    # Test with custom system content
+    backend = AnthropicBackend()
+    custom_system_content = "Custom system instructions"
+    await backend.process_query(
+        query="test query",
+        tools=mock_mcp_tools,
+        resources=[],
+        prompts=[],
+        execute_tool=AsyncMock(),
+        context=[{"role": "system", "content": custom_system_content}],
+    )
+
+    # Verify custom system content was used
+    call_kwargs = mock_client.messages.create.call_args[1]
+    assert "system" in call_kwargs
+    assert isinstance(call_kwargs["system"], list)
+    assert len(call_kwargs["system"]) == 1
+    assert call_kwargs["system"][0]["type"] == "text"
+    assert call_kwargs["system"][0]["text"] == custom_system_content
+
+    # Reset mock
+    mock_client.messages.create.reset_mock()
+
+    # Test without system content (should use default)
+    await backend.process_query(
+        query="test query",
+        tools=mock_mcp_tools,
+        resources=[],
+        prompts=[],
+        execute_tool=AsyncMock(),
+    )
+
+    # Verify default system content was used
+    call_kwargs = mock_client.messages.create.call_args[1]
+    assert "system" in call_kwargs
+    assert isinstance(call_kwargs["system"], list)
+    assert len(call_kwargs["system"]) == 1
+    assert call_kwargs["system"][0]["type"] == "text"
+    assert "You are an AI assistant" in call_kwargs["system"][0]["text"]
+    assert "<thinking>" in call_kwargs["system"][0]["text"]
+    assert "<answer>" in call_kwargs["system"][0]["text"]
+
+    # Reset mock
+    mock_client.messages.create.reset_mock()
+
+    # Test with None system content (should use default system content)
+    await backend.process_query(
+        query="test query",
+        tools=mock_mcp_tools,
+        resources=[],
+        prompts=[],
+        execute_tool=AsyncMock(),
+        context=[{"role": "system", "content": None}],
+    )
+
+    # Verify default system content was used
+    call_kwargs = mock_client.messages.create.call_args[1]
+    assert "system" in call_kwargs
+    assert isinstance(call_kwargs["system"], list)
+    assert len(call_kwargs["system"]) == 1
+    assert call_kwargs["system"][0]["type"] == "text"
+    assert "You are an AI assistant" in call_kwargs["system"][0]["text"]
+    assert "<thinking>" in call_kwargs["system"][0]["text"]
+    assert "<answer>" in call_kwargs["system"][0]["text"]

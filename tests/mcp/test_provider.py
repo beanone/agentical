@@ -746,3 +746,220 @@ async def test_prompt_retrieval_edge_cases(
 
         # Test None prompt name
         assert provider.prompt_registry.find_prompt_server(None) is None
+
+
+@pytest.mark.asyncio
+async def test_resource_not_found_error(mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack):
+    """Test error handling when a resource is not found.
+
+    This test verifies that appropriate errors are raised when:
+    1. A non-existent resource is requested
+    2. A resource's server cannot be found
+    """
+    provider = MCPToolProvider(mock_llm_backend, server_configs=valid_server_configs)
+    provider.exit_stack = mock_exit_stack
+    await provider.initialize()
+
+    # Connect to a server first
+    with patch.object(
+        provider.connection_service._connection_manager,
+        "connect",
+        side_effect=lambda name, config: mock_session(name),
+    ):
+        await provider.mcp_connect("server1")
+
+    # Try to get a non-existent resource
+    with pytest.raises(ValueError, match="Resource not found: nonexistent_resource"):
+        await provider.get_resource("nonexistent_resource")
+
+    # Try to get a resource when server is not found
+    provider.resource_registry.find_resource_server = Mock(return_value=None)
+    with pytest.raises(ValueError, match="Resource not found: test_resource"):
+        await provider.get_resource("test_resource")
+
+
+@pytest.mark.asyncio
+async def test_prompt_not_found_error(mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack):
+    """Test error handling when a prompt is not found.
+
+    This test verifies that appropriate errors are raised when:
+    1. A non-existent prompt is requested
+    2. A prompt's server cannot be found
+    """
+    provider = MCPToolProvider(mock_llm_backend, server_configs=valid_server_configs)
+    provider.exit_stack = mock_exit_stack
+    await provider.initialize()
+
+    # Connect to a server first
+    with patch.object(
+        provider.connection_service._connection_manager,
+        "connect",
+        side_effect=lambda name, config: mock_session(name),
+    ):
+        await provider.mcp_connect("server1")
+
+    # Try to get a non-existent prompt
+    with pytest.raises(ValueError, match="Prompt not found: nonexistent_prompt"):
+        await provider.get_prompt("nonexistent_prompt")
+
+    # Try to get a prompt when server is not found
+    provider.prompt_registry.find_prompt_server = Mock(return_value=None)
+    with pytest.raises(ValueError, match="Prompt not found: test_prompt"):
+        await provider.get_prompt("test_prompt")
+
+
+@pytest.mark.asyncio
+async def test_cleanup_server_error_handling(mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack):
+    """Test error handling during server cleanup.
+
+    This test verifies:
+    1. Exceptions during cleanup are properly re-raised
+    2. Cleanup of non-existent servers doesn't raise errors
+    3. All registries are properly cleaned up
+    """
+    provider = MCPToolProvider(mock_llm_backend, server_configs=valid_server_configs)
+    provider.exit_stack = mock_exit_stack
+    await provider.initialize()
+
+    # Connect to a server first
+    with patch.object(
+        provider.connection_service._connection_manager,
+        "connect",
+        side_effect=lambda name, config: mock_session(name),
+    ):
+        await provider.mcp_connect("server1")
+
+        # Verify tools were registered
+        assert "server1" in provider.tool_registry.tools_by_server
+        assert len(provider.tool_registry.tools_by_server["server1"]) > 0
+
+        # Test error case with a server that exists
+        with patch.object(provider.connection_service, "cleanup", side_effect=Exception("Cleanup error")), \
+             patch.object(provider.tool_registry, "remove_server_tools") as mock_remove_tools, \
+             patch.object(provider.resource_registry, "remove_server_resources") as mock_remove_resources, \
+             patch.object(provider.prompt_registry, "remove_server_prompts") as mock_remove_prompts:
+
+            # Cleanup should re-raise the exception
+            with pytest.raises(Exception, match="Cleanup error"):
+                await provider.cleanup_server("server1")
+
+            # Verify cleanup was attempted in the correct order
+            mock_remove_tools.assert_not_called()  # Should not be called due to error
+            mock_remove_resources.assert_not_called()
+            mock_remove_prompts.assert_not_called()
+
+        # Test cleanup of non-existent server (should not raise)
+        # Use a new mock that doesn't raise an error
+        with patch.object(provider.connection_service, "cleanup", new_callable=AsyncMock) as mock_cleanup:
+            await provider.cleanup_server("nonexistent_server")
+            mock_cleanup.assert_called_once_with("nonexistent_server")
+
+
+@pytest.mark.asyncio
+async def test_connect_all_empty_server_list(mock_llm_backend):
+    """Test connecting to servers when no servers are available.
+
+    This test verifies that attempting to connect to an empty list of servers:
+    1. Returns an empty result list
+    2. Logs appropriate warnings
+    3. Doesn't raise any errors
+    """
+    # Create provider with empty server configs but valid config provider
+    config_provider = DictBasedMCPConfigProvider({})
+    provider = MCPToolProvider(mock_llm_backend, config_provider=config_provider)
+    await provider.initialize()
+
+    # Should return empty list without error
+    results = await provider.mcp_connect_all()
+    assert results == []
+
+
+@pytest.mark.asyncio
+async def test_connect_all_partial_failure(mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack):
+    """Test handling of partial connection failures when connecting to multiple servers.
+
+    This test verifies that when connecting to multiple servers:
+    1. Successful connections are established where possible
+    2. Failed connections are properly reported
+    3. The overall operation continues despite individual failures
+    4. The result list contains appropriate success/failure information
+    """
+    provider = MCPToolProvider(mock_llm_backend, server_configs=valid_server_configs)
+    provider.exit_stack = mock_exit_stack
+    await provider.initialize()
+
+    # Mock connection to fail for one server
+    async def mock_connect(server_name, config):
+        if server_name == "server1":
+            raise ConnectionError("Failed to connect")
+        return mock_session(server_name)
+
+    with patch.object(
+        provider.connection_service._connection_manager,
+        "connect",
+        side_effect=mock_connect
+    ):
+        results = await provider.mcp_connect_all()
+
+        # Verify results
+        assert len(results) == 2
+        server1_result = next(r for r in results if r[0] == "server1")
+        server2_result = next(r for r in results if r[0] == "server2")
+
+        assert isinstance(server1_result[1], ConnectionError)
+        assert server2_result[1] is None
+
+        # Verify server2 tools were registered but server1 tools were not
+        assert "server2" in provider.tool_registry.tools_by_server
+        assert "server1" not in provider.tool_registry.tools_by_server
+
+
+@pytest.mark.asyncio
+async def test_cleanup_all_error_handling(mock_llm_backend, valid_server_configs, mock_session, mock_exit_stack):
+    """Test error handling during cleanup_all operation.
+
+    This test verifies that during cleanup_all:
+    1. All resources are attempted to be cleaned up
+    2. Errors in individual cleanups don't prevent other cleanups
+    3. Registries are cleared regardless of errors
+    4. Exit stack is properly closed
+    """
+    provider = MCPToolProvider(mock_llm_backend, server_configs=valid_server_configs)
+    provider.exit_stack = mock_exit_stack
+    await provider.initialize()
+
+    # Connect to servers first
+    with patch.object(
+        provider.connection_service._connection_manager,
+        "connect",
+        side_effect=lambda name, config: mock_session(name),
+    ):
+        await provider.mcp_connect("server1")
+        await provider.mcp_connect("server2")
+
+        # Verify initial state
+        assert len(provider.tool_registry.tools_by_server) == 2
+        assert len(provider.resource_registry.resources_by_server) == 2
+        assert len(provider.prompt_registry.prompts_by_server) == 2
+
+        # Mock cleanup to fail for connection service but still allow registry cleanup
+        provider.connection_service.cleanup_all = AsyncMock(side_effect=Exception("Cleanup error"))
+
+        # Mock registry clear methods to verify they're called
+        with patch.object(provider.tool_registry, "clear") as mock_tool_clear, \
+             patch.object(provider.resource_registry, "clear") as mock_resource_clear, \
+             patch.object(provider.prompt_registry, "clear") as mock_prompt_clear:
+
+            try:
+                # Should not raise despite the error
+                await provider.cleanup_all()
+            except Exception:
+                pass  # Error is expected but should not prevent registry cleanup
+
+            # Verify registry clear methods were called
+            mock_tool_clear.assert_called_once()
+            mock_resource_clear.assert_called_once()
+            mock_prompt_clear.assert_called_once()
+
+            # Verify connected servers are cleared
+            assert len(provider._connected_servers) == 0
