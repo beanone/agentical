@@ -1,0 +1,57 @@
+{
+  "request": {
+    "url": "https://api.openweathermap.org/data/2.5/weather",
+    "params": {
+      "q": "London,UK",
+      "units": "metric"
+    }
+  },
+  "response": {
+    "status_code": 200,
+    "json": {
+      "coord": {
+        "lon": -0.1257,
+        "lat": 51.5085
+      },
+      "weather": [
+        {
+          "id": 721,
+          "main": "Haze",
+          "description": "haze",
+          "icon": "50d"
+        }
+      ],
+      "base": "stations",
+      "main": {
+        "temp": 8.87,
+        "feels_like": 7.1,
+        "temp_min": 7.79,
+        "temp_max": 10.55,
+        "pressure": 1010,
+        "humidity": 84,
+        "sea_level": 1010,
+        "grnd_level": 1006
+      },
+      "visibility": 2800,
+      "wind": {
+        "speed": 3.09,
+        "deg": 80
+      },
+      "clouds": {
+        "all": 40
+      },
+      "dt": 1744441663,
+      "sys": {
+        "type": 2,
+        "id": 2091269,
+        "country": "GB",
+        "sunrise": 1744434653,
+        "sunset": 1744483871
+      },
+      "timezone": 3600,
+      "id": 2643743,
+      "name": "London",
+      "cod": 200
+    }
+  }
+}

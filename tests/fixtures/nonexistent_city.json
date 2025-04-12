@@ -1,0 +1,16 @@
+{
+  "request": {
+    "url": "https://api.openweathermap.org/data/2.5/weather",
+    "params": {
+      "q": "NonexistentCity123",
+      "units": "metric"
+    }
+  },
+  "response": {
+    "status_code": 404,
+    "json": {
+      "cod": "404",
+      "message": "city not found"
+    }
+  }
+}
