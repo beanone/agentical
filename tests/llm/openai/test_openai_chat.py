@@ -79,10 +79,10 @@ def test_init_without_api_key():
         OpenAIBackend()
 
 
-def test_format_tools(mock_env_vars, mock_mcp_tools):
+def test_convert_tools(mock_env_vars, mock_mcp_tools):
     """Test tool formatting for OpenAI."""
     backend = OpenAIBackend()
-    formatted = backend._format_tools(mock_mcp_tools)
+    formatted = backend.convert_tools(mock_mcp_tools)
 
     assert len(formatted) == 2
     assert formatted[0]["type"] == "function"
@@ -101,11 +101,11 @@ def test_format_tools(mock_env_vars, mock_mcp_tools):
     )
 
 
-def test_format_tools_handles_missing_parameters(mock_env_vars):
+def test_convert_tools_handles_missing_parameters(mock_env_vars):
     """Test tool formatting handles tools without parameters."""
     tools = [MCPTool(name="test", description="test", parameters={}, inputSchema={})]
     backend = OpenAIBackend()
-    formatted = backend._format_tools(tools)
+    formatted = backend.convert_tools(tools)
 
     assert len(formatted) == 1
     assert formatted[0]["function"]["parameters"] == {}

@@ -1,6 +1,5 @@
 """OpenAI implementation for chat interactions."""
 
-import json
 import logging
 import os
 import time
@@ -15,6 +14,8 @@ from mcp.types import Resource as MCPResource
 
 from agentical.api.llm_backend import LLMBackend
 from agentical.utils.log_utils import sanitize_log_message
+
+from .schema_adapter import SchemaAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,7 @@ class OpenAIBackend(LLMBackend[list[dict[str, str]]]):
         try:
             self.client = openai.AsyncOpenAI(api_key=api_key)
             self.model = os.getenv("OPENAI_MODEL", self.DEFAULT_MODEL)
+            self.schema_adapter = SchemaAdapter()
             logger.info(
                 "Initialized OpenAI client",
                 extra={"model": self.model, "api_key_length": len(api_key)},
@@ -60,7 +62,7 @@ class OpenAIBackend(LLMBackend[list[dict[str, str]]]):
             logger.error(error_msg, exc_info=True)
             raise ValueError(error_msg)
 
-    def _format_tools(self, tools: list[MCPTool]) -> list[dict[str, Any]]:
+    def convert_tools(self, tools: list[MCPTool]) -> list[dict[str, Any]]:
         """Format tools for OpenAI's function calling format.
 
         Args:
@@ -70,36 +72,14 @@ class OpenAIBackend(LLMBackend[list[dict[str, str]]]):
             List of tools in OpenAI function format
         """
         start_time = time.time()
-        formatted_tools = []
-
         try:
-            for tool in tools:
-                # Get the tool's schema directly from the MCP Tool
-                schema = tool.parameters if hasattr(tool, "parameters") else {}
-
-                # Create OpenAI function format
-                formatted_tool = {
-                    "type": "function",
-                    "function": {
-                        "name": tool.name,
-                        "description": tool.description,
-                        "parameters": schema,
-                    },
-                }
-                formatted_tools.append(formatted_tool)
-
-                logger.debug(
-                    "Formatted tool",
-                    extra={"tool_name": tool.name, "has_parameters": bool(schema)},
-                )
-
+            formatted_tools = self.schema_adapter.convert_mcp_tools_to_openai(tools)
             duration = time.time() - start_time
             logger.debug(
                 "Tool formatting completed",
                 extra={"num_tools": len(tools), "duration_ms": int(duration * 1000)},
             )
             return formatted_tools
-
         except Exception as e:
             duration = time.time() - start_time
             logger.error(
@@ -148,10 +128,10 @@ class OpenAIBackend(LLMBackend[list[dict[str, str]]]):
 
             # Initialize or use existing conversation context
             messages = list(context) if context else []
-            messages.append({"role": "user", "content": query})
+            messages.append(self.schema_adapter.create_user_message(query))
 
             # Convert tools to OpenAI format
-            formatted_tools = self._format_tools(tools)
+            formatted_tools = self.convert_tools(tools)
 
             while True:  # Continue until we get a response without tool calls
                 # Get response from OpenAI
@@ -170,33 +150,44 @@ class OpenAIBackend(LLMBackend[list[dict[str, str]]]):
 
                 message = response.choices[0].message
 
-                # If no tool calls, return the final response
-                if not message.tool_calls:
+                # Extract tool calls
+                tool_calls = self.schema_adapter.extract_tool_calls(message)
+
+                # If no tool calls and we have content, return the final response
+                if not tool_calls and message.content:
                     duration = time.time() - start_time
                     logger.info(
                         "Query completed without tool calls",
                         extra={"duration_ms": int(duration * 1000)},
                     )
-                    return message.content or "No response generated"
+                    return message.content
+
+                # If no tool calls and no content, continue the conversation
+                if not tool_calls:
+                    messages.append(
+                        self.schema_adapter.create_assistant_message(
+                            content="I encountered an error. Let me try again."
+                        )
+                    )
+                    continue
+
+                # Add assistant message with tool calls
+                messages.append(
+                    self.schema_adapter.create_assistant_message(
+                        content=None,
+                        tool_calls=[{
+                            "id": tool_call.id,
+                            "type": "function",
+                            "function": {
+                                "name": tool_call.function.name,
+                                "arguments": tool_call.function.arguments,
+                            },
+                        } for tool_call in message.tool_calls],
+                    )
+                )
 
                 # Handle each tool call
-                for tool_call in message.tool_calls:
-                    function_name = tool_call.function.name
-                    try:
-                        function_args = json.loads(tool_call.function.arguments)
-                    except json.JSONDecodeError as e:
-                        logger.error(
-                            "Failed to parse tool arguments",
-                            extra={
-                                "error": str(e),
-                                "tool_name": function_name,
-                                "raw_args": sanitize_log_message(
-                                    tool_call.function.arguments
-                                ),
-                            },
-                        )
-                        continue
-
+                for tool_call, (function_name, function_args) in zip(message.tool_calls, tool_calls):
                     # Execute the tool
                     tool_start = time.time()
                     try:
@@ -223,29 +214,12 @@ class OpenAIBackend(LLMBackend[list[dict[str, str]]]):
                         )
                         function_response = f"Error: {e!s}"
 
-                    # Add tool call and response to conversation
+                    # Add tool response to conversation
                     messages.append(
-                        {
-                            "role": "assistant",
-                            "content": None,
-                            "tool_calls": [
-                                {
-                                    "id": tool_call.id,
-                                    "type": "function",
-                                    "function": {
-                                        "name": function_name,
-                                        "arguments": tool_call.function.arguments,
-                                    },
-                                }
-                            ],
-                        }
-                    )
-                    messages.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": tool_call.id,
-                            "content": str(function_response),
-                        }
+                        self.schema_adapter.create_tool_response_message(
+                            tool_call_id=tool_call.id,
+                            result=function_response,
+                        )
                     )
 
                 # Continue the loop to let the model make more tool calls
@@ -265,16 +239,3 @@ class OpenAIBackend(LLMBackend[list[dict[str, str]]]):
                 "Query processing completed",
                 extra={"duration_ms": int(duration * 1000)},
             )
-
-    def convert_tools(self, tools: list[MCPTool]) -> list[dict[str, Any]]:
-        """Convert MCP tools to OpenAI format.
-
-        This is a public wrapper around _format_tools for the interface.
-
-        Args:
-            tools: List of MCP tools to convert
-
-        Returns:
-            List of tools in OpenAI format
-        """
-        return self._format_tools(tools)
