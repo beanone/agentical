@@ -14,7 +14,7 @@ class MockProvider:
 
     def __init__(self):
         self.initialize = AsyncMock()
-        self.cleanup = AsyncMock()
+        self.cleanup_all = AsyncMock()
         self.mcp_connect = AsyncMock()
         self.mcp_connect_all = AsyncMock()
         self.chat_loop = AsyncMock()
@@ -165,7 +165,7 @@ async def test_run_demo_single_server(mock_llm_backend, mock_config_provider):
         # Verify provider interactions
         provider.initialize.assert_called_once()
         provider.mcp_connect.assert_called_once_with("server1")
-        provider.cleanup.assert_called_once()
+        provider.cleanup_all.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -200,7 +200,7 @@ async def test_run_demo_all_servers(mock_llm_backend, mock_config_provider):
         # Verify provider interactions
         provider.initialize.assert_called_once()
         provider.mcp_connect_all.assert_called_once()
-        provider.cleanup.assert_called_once()
+        provider.cleanup_all.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -239,7 +239,7 @@ async def test_run_demo_all_servers_connection_failure(
         # Verify provider interactions
         provider.initialize.assert_called_once()
         provider.mcp_connect_all.assert_called_once()
-        provider.cleanup.assert_called_once()
+        provider.cleanup_all.assert_called_once()
 
 
 @pytest.mark.asyncio
