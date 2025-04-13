@@ -25,10 +25,6 @@ source .venv/bin/activate || error "Failed to activate virtual environment"
 section "Dependency Verification"
 python -c "import pytest, coverage, ruff" 2>/dev/null || error "Missing required dependencies. Please run: pip install pytest pytest-cov coverage ruff"
 
-# Define directories
-PACKAGE_DIRS="agentical server"  # Main package directories to test coverage for
-TEST_DIR="tests"                 # Directory containing tests
-
 # Format code and remove trailing spaces
 section "Code Formatting"
 echo "Formatting code..."
@@ -45,35 +41,38 @@ ruff check . --no-fix --no-cache || error "Ruff checks failed. Please fix the is
 # Run tests with coverage
 section "Running Tests"
 echo "Running tests with coverage..."
-pytest $TEST_DIR -v \
-    --cov=$PACKAGE_DIRS \
+# Run pytest with coverage
+pytest tests/ -v \
+    --cov=agentical \
+    --cov=server \
     --cov-report=term \
     --cov-report=html \
     --cov-report=xml \
     --cov-fail-under=80 || TEST_EXIT_CODE=$?
 
-# Generate coverage badge
-COVERAGE=$(coverage report | grep "TOTAL" | awk '{print $4}' | sed 's/%//')
-if [ -n "$COVERAGE" ]; then
-    if [ $COVERAGE -ge 90 ]; then
-        COLOR="brightgreen"
-    elif [ $COVERAGE -ge 80 ]; then
-        COLOR="green"
-    elif [ $COVERAGE -ge 70 ]; then
-        COLOR="yellowgreen"
-    elif [ $COVERAGE -ge 60 ]; then
-        COLOR="yellow"
-    else
-        COLOR="red"
-        error "Coverage below 60%. Please improve test coverage before release."
-    fi
+# Get the coverage percentage
+COVERAGE_FLOAT=$(coverage report | grep "TOTAL" | tail -1 | awk '{print $6}' | sed 's/%//')
+COVERAGE=$(echo "$COVERAGE_FLOAT" | awk '{printf "%.0f", $1}')
 
-    # Create badges directory if it doesn't exist
-    mkdir -p docs/assets/badges
-
-    # Download coverage badge
-    curl -s "https://img.shields.io/badge/coverage-${COVERAGE}%25-${COLOR}" > docs/assets/badges/coverage.svg || error "Failed to generate coverage badge"
+# Set badge color based on coverage
+if [ "$COVERAGE" -ge 90 ]; then
+    COLOR="brightgreen"
+elif [ "$COVERAGE" -ge 80 ]; then
+    COLOR="green"
+elif [ "$COVERAGE" -ge 70 ]; then
+    COLOR="yellowgreen"
+elif [ "$COVERAGE" -ge 60 ]; then
+    COLOR="yellow"
+else
+    COLOR="red"
+    error "Coverage below 60%. Please improve test coverage before release."
 fi
+
+# Create badges directory if it doesn't exist
+mkdir -p docs/assets/badges
+
+# Download coverage badge (use the original float value for display)
+curl -s "https://img.shields.io/badge/coverage-${COVERAGE_FLOAT}%25-${COLOR}" > docs/assets/badges/coverage.svg || error "Failed to generate coverage badge"
 
 # Generate test result badge
 if [ ${TEST_EXIT_CODE:-0} -eq 0 ]; then
