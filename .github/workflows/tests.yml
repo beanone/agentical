@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: write
+  pages: write
+
 jobs:
   tests:
     name: Tests
@@ -61,6 +65,7 @@ jobs:
           message: ${{ steps.coverage.outputs.COVERAGE }}%
           color: green
           namedLogo: python
+          writeToRepo: true # Explicitly write to the repository, not a Gist
 
       - name: Publish badge to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4
