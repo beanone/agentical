@@ -361,9 +361,7 @@ async def test_connection_service_reconnect_success(exit_stack, server_config):
 
         # Test reconnection
         success = await service.reconnect("server1")
-        assert success, (
-            f"Reconnect failed. Sessions: {service._connection_manager.sessions}, Configs: {service._connection_manager._configs}"
-        )
+        assert success, f"Reconnect failed. Sessions: {service._connection_manager.sessions}, Configs: {service._connection_manager._configs}"
         assert service.get_session("server1") is not None
 
         # Verify cleanup was called before reconnect
