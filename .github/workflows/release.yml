@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: release
-      url: https://pypi.org/p/beanone-agentical
+      url: https://pypi.org/project/beanone-agentical/
     permissions:
       id-token: write  # IMPORTANT: mandatory for trusted publishing
 
