@@ -1,15 +1,97 @@
+# Codecov configuration for Python project
+# https://docs.codecov.com/docs/codecov-yaml
+
+# Global settings
 coverage:
   status:
     project:
       default:
-        target: auto
-        threshold: 1%
+        target: 90%  # Minimum coverage threshold
+        threshold: 1%  # Allow 1% decrease in coverage
     patch:
       default:
-        target: auto
-        threshold: 1%
+        target: 90%  # Minimum coverage for new code
+        threshold: 1%  # Allow 1% decrease in coverage
 
+# Ignore certain files/directories from coverage
+ignore:
+  - "tests/*"  # Ignore test files themselves
+  - "docs/*"   # Ignore documentation
+  - "examples/*"  # Ignore example files
+  - "**/__init__.py"  # Ignore __init__.py files
+  - "**/_version.py"  # Ignore version files
+  - "setup.py"  # Ignore setup files
+
+# Coverage processing settings
+codecov:
+  require_ci_to_pass: true  # Only process coverage if CI passes
+  max_report_age: 24h  # Maximum age of coverage reports
+  notify:
+    wait_for_ci: true  # Wait for CI to complete before notifying
+
+# Comment settings for pull requests
 comment:
-  layout: "reach, diff, flags, files"
+  layout: "reach,diff,flags,files,footer"
   behavior: default
-  require_changes: false
+  require_changes: true  # Only comment if coverage changes
+  require_base: true  # Require base coverage for comparison
+
+# Flags for different types of coverage
+flags:
+  unit:
+    paths:
+      - "agentical/"
+    carryforward: true
+  integration:
+    paths:
+      - "tests/integration/"
+    carryforward: true
+
+# Coverage precision
+precision: 2  # Decimal places for coverage percentages
+
+# Coverage rounding
+round: down  # Round coverage numbers down
+
+# Coverage status checks
+status:
+  project:
+    default:
+      base: auto  # Compare against previous commit
+      target: 90%
+      threshold: 1%
+  patch:
+    default:
+      base: auto
+      target: 90%
+      threshold: 1%
+
+# GitHub integration settings
+github_checks:
+  annotations: true  # Show coverage annotations in GitHub
+  annotations_level: info  # Level of detail in annotations
+
+# Slack integration (if needed)
+slack:
+  notify:
+    - "coverage"  # Notify on coverage changes
+    - "status"    # Notify on status changes
+  notify_when:
+    - "coverage_decrease"  # Notify when coverage decreases
+    - "coverage_increase"  # Notify when coverage increases
+    - "status_change"      # Notify when status changes
+
+# Custom coverage processing
+fixes:
+  - "::before_script"  # Run before coverage processing
+  - "::after_script"   # Run after coverage processing
+
+# Cache settings
+cache:
+  enabled: true
+  max_age: 24h
+
+# Debug settings
+debug:
+  upload: false  # Disable debug uploads
+  verbose: false  # Disable verbose output

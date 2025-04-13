@@ -194,7 +194,7 @@ graph TD
     end
 
     subgraph Tool_Layer[Tool Layer - Add MCP Servers]
-        Tools[MCP Tools]
+        Tools[MCP Tools / Resources / Prompts]
         Session --> Tools
         GlamaLink["glama.ai/mcp/servers"]
         SmitheryLink["smithery.ai"]
