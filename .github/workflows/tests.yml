@@ -2,9 +2,9 @@ name: Tests
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   tests:
@@ -15,32 +15,59 @@ jobs:
         python-version: ["3.12"]
 
     steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -e .
-        pip install pytest pytest-cov ruff
-        if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest pytest-cov ruff
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
 
-    - name: Run Ruff
-      run: |
-        ruff check . --output-format=github
-        ruff format --check .
+      - name: Run Ruff
+        run: |
+          ruff check . --output-format=github
+          ruff format --check .
 
-    - name: Run tests with coverage
-      run: |
-        pytest --cov=./ --cov-report=xml --cov-report=term
+      - name: Run tests with coverage
+        run: |
+          pytest --cov=./ --cov-report=xml --cov-report=term
 
-    - name: Upload coverage reports to Codecov
-      uses: codecov/codecov-action@v3
-      env:
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v3
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Extract coverage percentage
+        id: coverage
+        run: |
+          COVERAGE_FLOAT=$(coverage report | grep "TOTAL" | tail -1 | awk '{print $NF}' | sed 's/%//')
+          COVERAGE=$(echo "$COVERAGE_FLOAT" | awk '{printf "%.0f", $1}')
+          echo "COVERAGE=$COVERAGE" >> $GITHUB_OUTPUT
+
+      - name: Generate coverage badge
+        uses: schneegans/dynamic-badges-action@v1.7.0
+        with:
+          auth: ${{ secrets.GITHUB_TOKEN }}
+          filename: coverage.svg
+          label: Coverage
+          message: ${{ steps.coverage.outputs.COVERAGE }}%
+          color: green
+          namedLogo: python
+
+      - name: Publish badge to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: .
+          branch: gh-pages
+          files: coverage.svg
+          clean: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
