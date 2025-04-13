@@ -84,9 +84,7 @@ class MCPConnectionManager:
         ```python
         manager = MCPConnectionManager(AsyncExitStack())
         try:
-            session = await manager.connect(
-                "server1", ServerConfig(command="cmd", args=[])
-            )
+            session = await manager.connect("server1", ServerConfig(command="cmd", args=[]))
             # Use session...
         finally:
             await manager.cleanup("server1")
