@@ -43,7 +43,7 @@ jobs:
     - name: Generate coverage badge
       run: |
         mkdir -p docs/assets/badges
-        coverage-badge -o docs/assets/badges/coverage.svg
+        coverage-badge -f -o docs/assets/badges/coverage.svg
 
     - name: Commit and push coverage badge if changed
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
