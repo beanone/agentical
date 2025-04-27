@@ -1,9 +1,9 @@
-<img src="docs/assets/logos/logo.svg" alt="Agentical Logo" width="100%"/>
+<img src="https://raw.githubusercontent.com/beanone/agentical/refs/heads/main/docs/assets/logos/logo.svg" alt="Agentical Logo" width="100%"/>
 
 [![Python Versions](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/beanone/agentical/blob/main/LICENSE)
 [![Tests](https://github.com/beanone/agentical/actions/workflows/tests.yml/badge.svg?python=3.12)](https://github.com/beanone/agentical/actions/workflows/tests.yml)
-[![Coverage](docs/assets/badges/coverage.svg)](htmlcov/index.html)
+[![Coverage](https://codecov.io/gh/beanone/agentical/branch/main/graph/badge.svg)](https://codecov.io/gh/beanone/agentical)
 [![Code Quality](https://img.shields.io/badge/code%20quality-ruff-green.svg)](https://github.com/astral-sh/ruff)
 [![PyPI version](https://badge.fury.io/py/beanone-agentical.svg?cache-control=no-cache)](https://badge.fury.io/py/beanone-agentical)
 
