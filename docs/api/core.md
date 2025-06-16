@@ -20,7 +20,6 @@ The abstract base class that defines the interface for all LLM implementations.
 ```python
 from abc import ABC, abstractmethod
 from typing import Generic, TypeVar
-from mcp.types import Tool as MCPTool
 
 Context = TypeVar("Context")
 
@@ -30,6 +29,8 @@ class LLMBackend(ABC, Generic[Context]):
         self,
         query: str,
         tools: list[MCPTool],
+        resources: list[MCPResource],
+        prompts: list[MCPPrompt],
         execute_tool: callable,
         context: Context | None = None,
     ) -> str:
@@ -38,6 +39,8 @@ class LLMBackend(ABC, Generic[Context]):
         Args:
             query: The user's input query
             tools: List of available MCP tools
+            resources: List of available MCP resources
+            prompts: List of available MCP prompts
             execute_tool: Callback function to execute a tool
             context: Optional conversation context/history
 
@@ -112,25 +115,25 @@ class MCPToolProvider:
 ### Lifecycle Management
 The MCPToolProvider implements several key lifecycles:
 
-1. [Provider Lifecycle](../discovery/system-lifecycles.md#2-provider-lifecycle)
+1. [Provider Lifecycle](../system-lifecycles.md#2-provider-lifecycle)
    - Initialization and configuration
    - Connection management
    - Operation handling
    - Resource cleanup
 
-2. [Connection Management](../discovery/system-lifecycles.md#3-connection-lifecycle)
+2. [Connection Management](../system-lifecycles.md#3-connection-lifecycle)
    - Connection establishment
    - Health monitoring
    - Automatic recovery
    - Resource cleanup
 
-3. [Tool Management](../discovery/system-lifecycles.md#4-tool-lifecycle)
+3. [Tool Management](../system-lifecycles.md#4-tool-lifecycle)
    - Tool discovery
    - Registration
    - Execution
    - Cleanup
 
-4. [Error Handling](../discovery/system-lifecycles.md#7-error-handling-and-recovery)
+4. [Error Handling](../system-lifecycles-detailed.md#7-error-handling-and-recovery)
    - Error detection
    - Recovery mechanisms
    - Resource protection

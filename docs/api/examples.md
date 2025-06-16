@@ -10,6 +10,10 @@
 >
 > These real code samples are thoroughly tested and maintained.
 
+> **📝 API Signature Note**
+>
+> All examples in this document have been updated to reflect the correct `LLMBackend.process_query()` signature which includes `resources` and `prompts` parameters. The actual implementation requires these parameters even if your LLM backend doesn't use them.
+
 ## Table of Contents
 - [Overview](#overview)
 - [Basic Usage](#basic-usage)
@@ -48,12 +52,16 @@ This document provides practical examples of using Agentical, from basic usage t
 
 ```python
 from agentical.api import LLMBackend
-from agentical.mcp import MCPToolProvider, FileBasedMCPConfigProvider
+from agentical.mcp import MCPToolProvider
+from agentical.mcp.config import FileBasedMCPConfigProvider
+from agentical.llm.openai import OpenAIBackend  # Example concrete implementation
 
 async def process_single_query():
     # Initialize provider with config
     config_provider = FileBasedMCPConfigProvider("config.json")
-    provider = MCPToolProvider(LLMBackend(), config_provider=config_provider)
+    # Use a concrete LLM backend implementation
+    llm_backend = OpenAIBackend()
+    provider = MCPToolProvider(llm_backend, config_provider=config_provider)
 
     try:
         # Initialize and connect
@@ -74,11 +82,11 @@ async def process_single_query():
 
 ```python
 from agentical.chat_client import run_demo
-from your_llm_backend import YourLLMBackend
+from agentical.llm.openai import OpenAIBackend  # Example concrete implementation
 
 async def main():
     # Initialize your LLM backend
-    llm_backend = YourLLMBackend()
+    llm_backend = OpenAIBackend()
 
     # Run the interactive demo
     await run_demo(llm_backend)
@@ -95,7 +103,7 @@ if __name__ == "__main__":
 ```python
 from agentical.api import LLMBackend
 from openai import AsyncOpenAI
-from mcp.types import Tool
+from mcp.types import Tool as MCPTool, Resource as MCPResource, Prompt as MCPPrompt
 
 class OpenAIBackend(LLMBackend[list]):
     def __init__(self, api_key: str, model: str = "gpt-4-turbo-preview"):
@@ -105,7 +113,9 @@ class OpenAIBackend(LLMBackend[list]):
     async def process_query(
         self,
         query: str,
-        tools: list[Tool],
+        tools: list[MCPTool],
+        resources: list[MCPResource],
+        prompts: list[MCPPrompt],
         execute_tool: callable,
         context: list | None = None
     ) -> str:
@@ -125,7 +135,7 @@ class OpenAIBackend(LLMBackend[list]):
         except Exception as e:
             raise LLMError(f"OpenAI processing failed: {e}")
 
-    def convert_tools(self, tools: list[Tool]) -> list[dict]:
+    def convert_tools(self, tools: list[MCPTool]) -> list[dict]:
         return [
             {
                 "type": "function",
@@ -144,7 +154,7 @@ class OpenAIBackend(LLMBackend[list]):
 ```python
 from agentical.api import LLMBackend
 import google.generativeai as genai
-from mcp.types import Tool
+from mcp.types import Tool as MCPTool, Resource as MCPResource, Prompt as MCPPrompt
 
 class GeminiBackend(LLMBackend[list]):
     """Gemini LLM backend implementation."""
@@ -157,7 +167,9 @@ class GeminiBackend(LLMBackend[list]):
     async def process_query(
         self,
         query: str,
-        tools: list[Tool],
+        tools: list[MCPTool],
+        resources: list[MCPResource],
+        prompts: list[MCPPrompt],
         execute_tool: callable,
         context: list | None = None
     ) -> str:
@@ -176,7 +188,7 @@ class GeminiBackend(LLMBackend[list]):
         except Exception as e:
             raise LLMError(f"Gemini processing failed: {e}")
 
-    def convert_tools(self, tools: list[Tool]) -> list[dict]:
+    def convert_tools(self, tools: list[MCPTool]) -> list[dict]:
         return [
             {
                 "name": tool.name,
@@ -192,7 +204,7 @@ class GeminiBackend(LLMBackend[list]):
 ```python
 from agentical.api import LLMBackend
 from anthropic import AsyncAnthropic
-from mcp.types import Tool
+from mcp.types import Tool as MCPTool, Resource as MCPResource, Prompt as MCPPrompt
 
 class AnthropicBackend(LLMBackend[list]):
     """Anthropic Claude LLM backend implementation."""
@@ -204,7 +216,9 @@ class AnthropicBackend(LLMBackend[list]):
     async def process_query(
         self,
         query: str,
-        tools: list[Tool],
+        tools: list[MCPTool],
+        resources: list[MCPResource],
+        prompts: list[MCPPrompt],
         execute_tool: callable,
         context: list | None = None
     ) -> str:
@@ -224,7 +238,7 @@ class AnthropicBackend(LLMBackend[list]):
         except Exception as e:
             raise LLMError(f"Anthropic processing failed: {e}")
 
-    def convert_tools(self, tools: list[Tool]) -> list[dict]:
+    def convert_tools(self, tools: list[MCPTool]) -> list[dict]:
         return [
             {
                 "name": tool.name,
@@ -243,12 +257,15 @@ class AnthropicBackend(LLMBackend[list]):
 
 ```python
 from agentical.api import LLMBackend
-from agentical.mcp import MCPToolProvider, FileBasedMCPConfigProvider
+from agentical.mcp import MCPToolProvider
+from agentical.mcp.config import FileBasedMCPConfigProvider
+from agentical.llm.openai import OpenAIBackend  # Example concrete implementation
 
 async def use_weather_tool():
     # Initialize provider with config file
     config_provider = FileBasedMCPConfigProvider("config.json")
-    provider = MCPToolProvider(LLMBackend(), config_provider=config_provider)
+    llm_backend = OpenAIBackend()
+    provider = MCPToolProvider(llm_backend, config_provider=config_provider)
 
     try:
         # Connect to weather server
@@ -270,6 +287,7 @@ async def use_weather_tool():
 from agentical.api import LLMBackend
 from agentical.mcp import MCPToolProvider
 from agentical.mcp.schemas import ServerConfig
+from agentical.llm.openai import OpenAIBackend  # Example concrete implementation
 
 async def use_weather_tool():
     # Direct server configuration
@@ -282,7 +300,8 @@ async def use_weather_tool():
     }
 
     # Initialize provider
-    provider = MCPToolProvider(LLMBackend(), server_configs=server_configs)
+    llm_backend = OpenAIBackend()
+    provider = MCPToolProvider(llm_backend, server_configs=server_configs)
 
     try:
         # Connect and use tool
@@ -492,12 +511,15 @@ There are two ways to configure Agentical to use MCP tools:
 
 ```python
 from agentical.api import LLMBackend
-from agentical.mcp import MCPToolProvider, FileBasedMCPConfigProvider
+from agentical.mcp import MCPToolProvider
+from agentical.mcp.config import FileBasedMCPConfigProvider
+from agentical.llm.openai import OpenAIBackend  # Example concrete implementation
 
 async def use_weather_tool():
     # Initialize provider with config file
     config_provider = FileBasedMCPConfigProvider("config.json")
-    provider = MCPToolProvider(LLMBackend(), config_provider=config_provider)
+    llm_backend = OpenAIBackend()
+    provider = MCPToolProvider(llm_backend, config_provider=config_provider)
 
     try:
         # Connect to weather server
@@ -519,6 +541,7 @@ async def use_weather_tool():
 from agentical.api import LLMBackend
 from agentical.mcp import MCPToolProvider
 from agentical.mcp.schemas import ServerConfig
+from agentical.llm.openai import OpenAIBackend  # Example concrete implementation
 
 async def use_weather_tool():
     # Direct server configuration
@@ -531,7 +554,8 @@ async def use_weather_tool():
     }
 
     # Initialize provider
-    provider = MCPToolProvider(LLMBackend(), server_configs=server_configs)
+    llm_backend = OpenAIBackend()
+    provider = MCPToolProvider(llm_backend, server_configs=server_configs)
 
     try:
         # Connect and use tool
@@ -610,12 +634,15 @@ Both styles are fully supported by Agentical - the choice between them is a serv
 
 ```python
 from agentical.api import LLMBackend
-from agentical.mcp import MCPToolProvider, FileBasedMCPConfigProvider
+from agentical.mcp import MCPToolProvider
+from agentical.mcp.config import FileBasedMCPConfigProvider
+from agentical.llm.openai import OpenAIBackend  # Example concrete implementation
 
 async def use_multiple_servers():
     # Initialize provider
     config_provider = FileBasedMCPConfigProvider("config.json")
-    provider = MCPToolProvider(LLMBackend(), config_provider=config_provider)
+    llm_backend = OpenAIBackend()
+    provider = MCPToolProvider(llm_backend, config_provider=config_provider)
 
     try:
         # Initialize and connect to all servers
@@ -688,11 +715,14 @@ async def handle_errors():
 
 ```python
 from agentical.api import LLMBackend
-from agentical.mcp import MCPToolProvider, FileBasedMCPConfigProvider
+from agentical.mcp import MCPToolProvider
+from agentical.mcp.config import FileBasedMCPConfigProvider
+from agentical.llm.openai import OpenAIBackend  # Example concrete implementation
 
 async def manage_context():
     config_provider = FileBasedMCPConfigProvider("config.json")
-    provider = MCPToolProvider(LLMBackend(), config_provider=config_provider)
+    llm_backend = OpenAIBackend()
+    provider = MCPToolProvider(llm_backend, config_provider=config_provider)
 
     try:
         await provider.initialize()
