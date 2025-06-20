@@ -150,9 +150,11 @@ from agentical.mcp.config import FileBasedMCPConfigProvider
 
 async def main():
     # Initialize with your chosen LLM backend
+    llm_backend = OpenAIBackend()
+    config_provider = FileBasedMCPConfigProvider("config.json")
     provider = MCPToolProvider(
-        OpenAIBackend(),
-        config_provider=FileBasedMCPConfigProvider("config.json")
+        llm_backend,
+        config_provider=config_provider
     )
 
     try:
